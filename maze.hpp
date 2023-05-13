@@ -108,7 +108,8 @@ struct Segment {
       }
     }
 
-    annotate(renderer, font);
+    (void) font;
+    //annotate(renderer, font);
   }
   
   bool intersects(int x, int y)

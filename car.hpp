@@ -5,6 +5,15 @@
 #include "distsensor.hpp"
 #include "maze.hpp"
 
+#define FOLLOW_LINE 0
+#define MAKING_LEFT_TURN 1
+#define MAKING_RIGHT_TURN 2
+#define MOVING_UP 3
+#define CHECKING_LEFT 4
+#define CHECKING_FRONT 5
+
+#define MOVE_UP_TIME 0.75
+
 struct Car {
 
   LineSensor lsen;
@@ -17,10 +26,19 @@ struct Car {
 
   double w = 40;
   double l = 45;
+
+  bool front_wall_detected = false;
+  bool left_wall_detected = false;
+  bool going_straight = false;
+  int next_turn = 0; // -1 next turn left, +1 next turn right
+
+  // moving up is based on a timer, start timer when initiating moving up
+  uint32_t moving_up_start_ticks = 0;
   
   Car(SDL_Renderer* renderer) {
+
     x = 0.5*CELL_SIZE;
-    y = 3.5*CELL_SIZE;
+    y = 4.5*CELL_SIZE;
 
     // These coordinates are relative to car center
     lsen.x = -0.15*w;
@@ -35,9 +53,6 @@ struct Car {
     rsen.y = -l/2.0;
     rsen.car = this;
 
-    distsen.x = 0;
-    distsen.y = 0;
-    distsen.pos = -1;
     distsen.car = this;
     
     createTexture(renderer);
@@ -79,15 +94,50 @@ struct Car {
     return dist;
   }
 
-  void control(Maze& maze)
+  void forward_clear_corner(int& mode)
   {
-    double steer_amount = 0.001*M_PI;
+    (void) mode;
+    
+  }
+
+  void turn_left(int& mode, Maze& maze)
+  {
+    (void) mode;
+    double turn_speed = M_PI/200;
+    theta -= turn_speed;
+
+    bool l,m,r;
+    readlinesensors(maze, l, m, r);
+    if (!l && m && r) {
+      mode = FOLLOW_LINE;
+    }
+    
+  }
+
+  void turn_right(int& mode, Maze& maze)
+  {
+    (void) mode;
+    double turn_speed = M_PI/200;
+    theta += turn_speed;
+
+    bool l,m,r;
+    readlinesensors(maze, l, m, r);
+    if (l && m && !r) {
+      mode = FOLLOW_LINE;
+    }
+  }
+  
+  void follow_line(int& mode, Maze& maze)
+  {
+    (void) mode;
+    
+    double steer_amount = 0.005*M_PI;
     
     bool l,m,r;
     readlinesensors(maze, l, m, r);
     printf("l=%d, m=%d, r=%d\n",l,m,r);
-    
-    forward();
+
+    going_straight = false;
     if (l && m && !r)  {
       printf("110: steer left\n");
       theta -= steer_amount;
@@ -101,12 +151,171 @@ struct Car {
       theta += steer_amount;
     }
     if (!l && !m && r) {
-      printf("001: steer hard right\n");
+      printf("001: steer right\n");
       theta += steer_amount;
     }
+    if (!l && m && !r) {
+      printf("010: forward\n");
+      forward();
+      going_straight = true;
+    }
+    if (l && m && r) {
+      printf("111: forward?\n");
+      forward();
+    }
+    if (!l && !m && !r) {
+      printf("000: forward?\n");
+      forward();
+    }
+    forward();
+  }
 
+  void move_up(int& mode, Maze& maze)
+  {
+    uint32_t cur_ticks = SDL_GetTicks();
+    double elapsed_moving_up =  (cur_ticks - moving_up_start_ticks) / 1000.0; // Convert to secs
+
+    if (elapsed_moving_up > MOVE_UP_TIME) {
+      printf("MOVE UP TIMEOUT\n");
+      if (next_turn == -1) mode = MAKING_LEFT_TURN;
+      if (next_turn == +1) mode = MAKING_RIGHT_TURN;
+      return;
+    }
+    
+    forward();
+
+    (void) maze;
+    // bool l,m,r;
+    // readlinesensors(maze, l, m, r);
+    // if (!l && !m && !r) {
+    //   if (next_turn == -1) mode = MAKING_LEFT_TURN;
+    //   if (next_turn == +1) mode = MAKING_RIGHT_TURN;
+    // }
+  }
+
+  void check_left(int& mode, Maze& maze, double elapsed_time)
+  {
+    if (!going_straight) return;
+    
+    (void) elapsed_time;
+    printf("checking left\n");
+
+    distsen.rot = -1;
+    double dist = readdistancesensor(maze);
+    printf("left dist = %f\n",dist);
+    if (dist < 60) {
+      left_wall_detected = true;
+    }
+    else {
+      left_wall_detected = false;
+    }
+
+    printf("left wall detected? %d\n",left_wall_detected);
+    if (left_wall_detected) {
+
+      printf(" -- front wall detected? %d\n",front_wall_detected);
+      if (front_wall_detected) {
+	front_wall_detected = false;
+	printf(" -- change mode to right turn\n");
+	mode = MOVING_UP;
+	moving_up_start_ticks = SDL_GetTicks();
+	next_turn = +1;
+	return;
+      }
+      else {
+	printf(" -- change mode to follow line\n");
+	mode = FOLLOW_LINE;
+	return;
+      }
+    }
+    else {
+      mode = MOVING_UP;
+      moving_up_start_ticks = SDL_GetTicks();
+      next_turn = -1;
+      return;
+    }
+  }
+
+  void check_front(int& mode, Maze& maze, double elapsed_time)
+  {
+    if (!going_straight) return;
+
+    printf("checking front\n");
+    distsen.rot = 0;
     double dist = readdistancesensor(maze);
     printf("dist = %f\n",dist);
+
+    if (dist < 60) {
+      front_wall_detected = true;
+    }
+    else {
+      front_wall_detected = false;
+    }
+      
+    (void) maze;
+    (void) mode;
+    (void) elapsed_time;
+  }
+  
+  void control(Maze& maze, double elapsed_time)
+  {
+    (void) elapsed_time;
+    
+    static int mode = FOLLOW_LINE;
+
+    switch (mode) {
+      
+    case FOLLOW_LINE:
+      printf("mode is follow line %d\n",mode);
+      follow_line(mode, maze);
+      check_left(mode, maze, elapsed_time);
+      check_front(mode, maze, elapsed_time);
+      break;
+    case MAKING_LEFT_TURN:
+      printf("mode is making left turn %d\n",mode);
+      turn_left(mode, maze);
+      break;
+    case MAKING_RIGHT_TURN:
+      printf("mode is making right turn %d\n",mode);
+      turn_right(mode, maze);
+      break;
+    case MOVING_UP:
+      printf("mode is moving up %d\n",mode);
+      move_up(mode, maze);
+      break;
+    case CHECKING_LEFT:
+      printf("mode is checking left %d\n",mode);
+      check_left(mode, maze, elapsed_time);
+      break;
+    case CHECKING_FRONT:
+      printf("mode is checking front %d\n",mode);
+      check_front(mode, maze, elapsed_time);
+      break;
+    }
+    
+    // if (check_front) {
+    //   if (distsen.rot == -1) distsen.rot = 0;
+    // }
+    // else {
+
+    //   // check for left wall
+    //   if (distsen.rot != -1) distsen.rot = -1;
+    //   double dist = readdistancesensor(maze);
+
+    //   dist < 75 ? left_wall_detected = true : left_wall_detected = false;
+
+    //   if (!left_wall_detected) {
+    // 	forward_clear_corner();
+    // 	turn_left();
+    //   }
+      
+      
+    // double dist = readdistancesensor(maze);
+    // printf("dist = %f\n",dist);
+
+    // if (elapsed_time > 3.0) {
+    //   distsen.rot = 0;
+    // }
   }
 
   double x,y;

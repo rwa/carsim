@@ -16,9 +16,13 @@ struct DistSensor {
   int getLocalY();
 
   double getWorldTheta();
-  
-  int pos;
 
+  void moveToFront();
+  void moveToLeft();
+  void moveToRight();
+
+  int rot = -1;
+  
   // local coordinates on the car, relative to center
   int x;
   int y;

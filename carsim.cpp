@@ -22,8 +22,12 @@ using namespace std;
 const int FPS = 60; // The desired frame rate
 const int frameDelay = 1000 / FPS; // Time for one frame in milliseconds
 
+uint32_t startTime;
+
 Uint32 frameStart;
 int frameTime;
+
+bool isPaused = false;
 
 Maze parseMaze()
 {
@@ -119,6 +123,8 @@ int main()
   }
 
   Car car(renderer);
+
+  startTime = SDL_GetTicks();
   
   // Main loop
   bool running = true;
@@ -132,7 +138,16 @@ int main()
       if (event.type == SDL_QUIT) {
 	running = false;
       }
+      else if (event.type == SDL_KEYDOWN) {
+	switch (event.key.keysym.sym) {
+	case SDLK_SPACE:  // Press 'P' to pause/unpause the game
+	  isPaused = !isPaused;
+	  break;
+	}
+      }
     }
+
+    if (isPaused) continue;
     
     // Clear the screen
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
@@ -192,8 +207,11 @@ int main()
     // Update the window
     SDL_RenderPresent(renderer);
 
+    uint32_t currTime = SDL_GetTicks();
+    double elapsed_time = (currTime - startTime) / 1000.0; // Convert to seconds.
+    
     // Control the car
-    car.control(maze);
+    car.control(maze, elapsed_time);
 
     frameTime = SDL_GetTicks() - frameStart;
 
