@@ -11,8 +11,8 @@ struct LineSensor {
 
   Car* car;
 
-  int getWorldX();
-  int getWorldY();
+  int getWorldX(double theta);
+  int getWorldY(double theta);
 
   // local coordinates on the car, relative to center
   int x;

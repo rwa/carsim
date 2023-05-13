@@ -2,12 +2,16 @@
 #include "linesensor.hpp"
 #include "car.hpp"
 
-int LineSensor::getWorldX()
+int LineSensor::getWorldX(double theta)
 {
-  return x +car->x;
+  double xr = x*cos(theta)-y*sin(theta);
+
+  return xr +car->x;
 }
 
-int LineSensor::getWorldY()
+int LineSensor::getWorldY(double theta)
 {
-  return y +car->y;
+  double yr = x*sin(theta)+y*cos(theta);
+
+  return yr +car->y;
 }

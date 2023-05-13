@@ -10,6 +10,9 @@ struct Car {
   LineSensor msen;
   LineSensor rsen;
 
+  double w = 40;
+  double l = 45;
+  
   Car(SDL_Renderer* renderer) {
     x = 0.5*CELL_SIZE;
     y = 3.5*CELL_SIZE;
@@ -33,7 +36,7 @@ struct Car {
   void forward()
   {
     double u = 1.0;
-    double dt = 0.1;
+    double dt = 0.2;
     
     x += u*sin(theta)*dt;
     y -= u*cos(theta)*dt;
@@ -41,28 +44,45 @@ struct Car {
 
   void readlinesensors(Maze& maze, bool& l, bool& m, bool& r)
   {
-    //l = maze.detectPath(lsen.getWorldX(), lsen.getWorldY());
-    m = maze.detectPath(msen.getWorldX(), msen.getWorldY());
-    //r = maze.detectPath(rsen.getWorldX(), rsen.getWorldY());
+    l = maze.detectPath(lsen.getWorldX(theta), lsen.getWorldY(theta));
+    m = maze.detectPath(msen.getWorldX(theta), msen.getWorldY(theta));
+    r = maze.detectPath(rsen.getWorldX(theta), rsen.getWorldY(theta));
   }
 
   void control(Maze& maze)
   {
+    double steer_amount = 0.001*M_PI;
+    
     bool l,m,r;
     readlinesensors(maze, l, m, r);
     printf("l=%d, m=%d, r=%d\n",l,m,r);
     
     forward();
+    printf("theta = %f\n",theta);
+    if (l && m && !r)  {
+      printf("110: steer left\n");
+      theta -= steer_amount;
+    }
+    if (l && !m && !r) {
+      printf("100: steer left\n");
+      theta -= steer_amount;
+    }
+    if (!l && m && r)  {
+      printf("011: steer right\n");
+      theta += steer_amount;
+    }
+    if (!l && !m && r) {
+      printf("001: steer hard right\n");
+      theta += steer_amount;
+    }
+    printf("theta now %f\n",theta);
   }
 
-  double w = 40;
-  double l = 65;
-  
   double x,y;
 
   double r = static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
 
-  double theta_rand = 0.05*r*M_PI;
+  double theta_rand = 0.1*r*M_PI;
   double theta = 0 +theta_rand;
 
   SDL_Texture* texture;
@@ -79,7 +99,7 @@ struct Car {
     
     // Draw the arrow
     SDL_Renderer* softwareRenderer = SDL_CreateSoftwareRenderer(surface);
-    SDL_SetRenderDrawColor(softwareRenderer, 0, 0, 0, 255); // black color
+    SDL_SetRenderDrawColor(softwareRenderer, 100, 30, 100, 100); // black color
     SDL_RenderDrawLine(softwareRenderer, width / 2, 10, 10, height - 10); // left edge
     SDL_RenderDrawLine(softwareRenderer, width / 2, 10, width - 10, height - 10); // right edge
     SDL_RenderDrawLine(softwareRenderer, 10, height - 10, width - 10, height - 10); // base
@@ -114,6 +134,36 @@ struct Car {
     destRect.w = w;
     destRect.h = l;
     SDL_RenderCopyEx(renderer, texture, NULL, &destRect, theta*180./M_PI, NULL, SDL_FLIP_NONE);
+
+    // Draw the sensors independently of the rotation so that we can
+    // see if our world coordinates are right.
+    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255); // red
+    SDL_RenderDrawPoint(renderer, lsen.getWorldX(theta), lsen.getWorldY(theta));
+    SDL_RenderDrawPoint(renderer, lsen.getWorldX(theta)+1, lsen.getWorldY(theta));
+    SDL_RenderDrawPoint(renderer, lsen.getWorldX(theta), lsen.getWorldY(theta)+1);
+    SDL_RenderDrawPoint(renderer, lsen.getWorldX(theta)-1, lsen.getWorldY(theta));
+    SDL_RenderDrawPoint(renderer, lsen.getWorldX(theta), lsen.getWorldY(theta)-1);
+
+    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255); // green
+    SDL_RenderDrawPoint(renderer, msen.getWorldX(theta), msen.getWorldY(theta));
+    SDL_RenderDrawPoint(renderer, msen.getWorldX(theta)+1, msen.getWorldY(theta));
+    SDL_RenderDrawPoint(renderer, msen.getWorldX(theta), msen.getWorldY(theta)+1);
+    SDL_RenderDrawPoint(renderer, msen.getWorldX(theta)-1, msen.getWorldY(theta));
+    SDL_RenderDrawPoint(renderer, msen.getWorldX(theta), msen.getWorldY(theta)-1);
+
+    SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255); // green
+    SDL_RenderDrawPoint(renderer, rsen.getWorldX(theta), rsen.getWorldY(theta));
+    SDL_RenderDrawPoint(renderer, rsen.getWorldX(theta)+1, rsen.getWorldY(theta));
+    SDL_RenderDrawPoint(renderer, rsen.getWorldX(theta), rsen.getWorldY(theta)+1);
+    SDL_RenderDrawPoint(renderer, rsen.getWorldX(theta)-1, rsen.getWorldY(theta));
+    SDL_RenderDrawPoint(renderer, rsen.getWorldX(theta), rsen.getWorldY(theta)-1);
+    
+    // SDL_SetRenderDrawColor(softwareRenderer, 0, 255, 0, 255); // green
+    // SDL_RenderDrawPoint(softwareRenderer, w/2.0 +msen.x, l/2.0 +msen.y);
+
+    // SDL_SetRenderDrawColor(softwareRenderer, 0, 0, 255, 255); // blue
+    // SDL_RenderDrawPoint(softwareRenderer, w/2.0 +rsen.x, l/2.0 +rsen.y);
+    
   }
 
   ~Car() {
