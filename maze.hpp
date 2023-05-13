@@ -326,7 +326,7 @@ public:
 
       std::optional<Point> pt = getIntersection(r, seg);
       if (pt) {
-	printf("found intersection with vert wall\n");
+
 	double dx = pt->x -x;
 	double dy = pt->y -y;
 	double dist = sqrt(dx*dx +dy*dy);
@@ -350,7 +350,7 @@ public:
 
       std::optional<Point> pt = getIntersection(r, seg);
       if (pt) {
-	printf("found intersection with horiz wall\n");
+
 	double dx = pt->x-x;
 	double dy = pt->y-y;
 	double dist = sqrt(dx*dx+dy*dy);

@@ -7,13 +7,9 @@ std::optional<Point> getIntersection(const Ray& ray, const LineSeg& segment) {
     // LineSeg direction vector
     Point segDir = {segment.end.x - segment.start.x, segment.end.y - segment.start.y};
 
-    printf("segDir = (%f,%f)\n",segDir.x,segDir.y);
-
     // Calculate the determinant
     double det = -ray.direction.x * segDir.y + ray.direction.y * segDir.x;
 
-    printf("det = %f\n",det);
-    
     if (std::abs(det) < 1e-8) {
         // The lines are parallel (or coincident, if they lie on top of each other)
         return {};
@@ -22,12 +18,6 @@ std::optional<Point> getIntersection(const Ray& ray, const LineSeg& segment) {
     // Calculate the parametric distance along each line where the intersection occurs
     double u = -(-ray.direction.y * (ray.origin.x - segment.start.x) + ray.direction.x * (ray.origin.y - segment.start.y)) / det;
     double t = -(segDir.x * (ray.origin.y - segment.start.y) - segDir.y * (ray.origin.x - segment.start.x)) / det;
-
-    printf("u = %f\n",u);
-    printf("t = %f\n",t);
-
-    printf("ray origin x = %f\n",ray.origin.x);
-    printf("ray direction x = %f\n",ray.direction.x);
 
     if (t >= 0 && u >= 0 && u <= 1) {
         // The intersection point is on the segment and in the ray's direction
