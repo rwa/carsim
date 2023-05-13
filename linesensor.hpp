@@ -7,7 +7,7 @@ struct LineSensor {
 
   LineSensor() {};
   
-  LineSensor(Car* car_, int x_, int y_, int size_) : car(car_), x(x_), y(y_), size(size_) {};
+  LineSensor(Car* car_, int x_, int y_) : car(car_), x(x_), y(y_) {};
 
   Car* car;
 
@@ -18,7 +18,6 @@ struct LineSensor {
   int x;
   int y;
   
-  int size;
 };
 
 #endif

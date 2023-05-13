@@ -42,6 +42,8 @@ struct Segment {
     id = id_count;
     id_count++;
 
+    selected = false;
+    
     vertical = false;
     horizontal = false;
     if (x0 == x1) vertical = true;
@@ -53,6 +55,8 @@ struct Segment {
 
   bool vertical;
   bool horizontal;
+
+  bool selected;
 
   int x0,y0;
   int x1,y1;
@@ -85,11 +89,21 @@ struct Segment {
 
     if (vertical) {
       SDL_Rect rect = {x0-hw, y0, hw*2, y1-y0};
+      SDL_SetRenderDrawColor(renderer, 255, 0, 0, 100); // Set color to red
       SDL_RenderFillRect(renderer, &rect);
+      if (selected) {
+	SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE); // Set color to white
+	SDL_RenderDrawRect(renderer, &rect);
+      }
     }
     if (horizontal) {
-      SDL_Rect rect = {x0-hw, y0-hw, x1-x0+hw*2, hw*2};
+      SDL_Rect rect = {x0, y0-hw, x1-x0, hw*2};
+      SDL_SetRenderDrawColor(renderer, 255, 0, 0, 100); // Set color to red
       SDL_RenderFillRect(renderer, &rect);
+      if (selected) {
+	SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE); // Set color to white
+	SDL_RenderDrawRect(renderer, &rect);
+      }
     }
 
     annotate(renderer, font);
@@ -103,22 +117,19 @@ struct Segment {
 
     bool intersects = false;
     if (vertical) {
-
       SDL_Rect rect = {x0-hw, y0, hw*2, y1-y0};
-      
-      // if (id==26 || id==17) {
-      // 	printf("checking (%d,%d) intersects with vertical seg %d\n",x,y,id);
-      // 	printf("rect (%d,%d),(%d,%d)\n",rect.x,rect.y,rect.x+rect.w,rect.y+rect.h);
-      // 	printf("point (%d,%d)\n",p.x,p.y);
-      // }
       intersects = SDL_PointInRect(&p, &rect);
-      // if (id==26 || id==17) {
-      // 	printf("intersects=%d\n",intersects);
-      // }
     }
     if (horizontal) {
-      SDL_Rect rect = {x0-hw, y0-hw, x1-x0+hw*2, hw*2};
+      SDL_Rect rect = {x0, y0-hw, x1-x0, hw*2};
       intersects = SDL_PointInRect(&p, &rect);
+    }
+
+    if (intersects) {
+      selected = true;
+    }
+    else {
+      selected = false;
     }
 
     return intersects;
@@ -244,7 +255,6 @@ public:
     }
 
     // Draw pathlines
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE); // Set color to red
     for (auto it: pathsegs) {
       it.draw(renderer, font);
       
@@ -262,10 +272,11 @@ public:
 
   bool detectPath(int x, int y)
   {
-    for (auto it: pathsegs) {
-      if (it.intersects(x,y)) return true;
+    bool intersection = false;
+    for (auto& it: pathsegs) {
+      if (it.intersects(x,y)) intersection = true;
     }
-    return false;
+    return intersection;
   }
   
   void print() {

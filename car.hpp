@@ -15,20 +15,16 @@ struct Car {
     y = 3.5*CELL_SIZE;
 
     // These coordinates are relative to car center
-    int size = 6;
-    lsen.x = -0.2*w;
+    lsen.x = -0.3*w;
     lsen.y = -l/2.0;
-    lsen.size = size;
     lsen.car = this;
     
     msen.x = 0;
     msen.y = -l/2.0;
-    msen.size = size;
     msen.car = this;
 
-    rsen.x = +0.2*w;
+    rsen.x = +0.3*w;
     rsen.y = -l/2.0;
-    rsen.size = size;
     rsen.car = this;
     
     createTexture(renderer);
@@ -45,9 +41,9 @@ struct Car {
 
   void readlinesensors(Maze& maze, bool& l, bool& m, bool& r)
   {
-    l = maze.detectPath(lsen.getWorldX(), lsen.getWorldY());
+    //l = maze.detectPath(lsen.getWorldX(), lsen.getWorldY());
     m = maze.detectPath(msen.getWorldX(), msen.getWorldY());
-    r = maze.detectPath(rsen.getWorldX(), rsen.getWorldY());
+    //r = maze.detectPath(rsen.getWorldX(), rsen.getWorldY());
   }
 
   void control(Maze& maze)
