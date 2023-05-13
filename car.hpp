@@ -18,7 +18,7 @@ struct Car {
     y = 3.5*CELL_SIZE;
 
     // These coordinates are relative to car center
-    lsen.x = -0.3*w;
+    lsen.x = -0.15*w;
     lsen.y = -l/2.0;
     lsen.car = this;
     
@@ -26,7 +26,7 @@ struct Car {
     msen.y = -l/2.0;
     msen.car = this;
 
-    rsen.x = +0.3*w;
+    rsen.x = +0.15*w;
     rsen.y = -l/2.0;
     rsen.car = this;
     
