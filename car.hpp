@@ -1,6 +1,9 @@
 
 #include <SDL.h>
 
+#include <string>
+using namespace std;
+
 #include "linesensor.hpp"
 #include "distsensor.hpp"
 #include "maze.hpp"
@@ -27,9 +30,11 @@ struct Car {
   double w = 40;
   double l = 45;
 
+  int mode;
+
   bool front_wall_detected = false;
   bool left_wall_detected = false;
-  bool going_straight = false;
+  bool going_straight = true;
   int next_turn = 0; // -1 next turn left, +1 next turn right
 
   // moving up is based on a timer, start timer when initiating moving up
@@ -54,6 +59,8 @@ struct Car {
     rsen.car = this;
 
     distsen.car = this;
+
+    mode = FOLLOW_LINE;
     
     createTexture(renderer);
   }
@@ -94,13 +101,13 @@ struct Car {
     return dist;
   }
 
-  void forward_clear_corner(int& mode)
+  void forward_clear_corner()
   {
     (void) mode;
     
   }
 
-  void turn_left(int& mode, Maze& maze)
+  void turn_left(Maze& maze)
   {
     (void) mode;
     double turn_speed = M_PI/200;
@@ -109,12 +116,13 @@ struct Car {
     bool l,m,r;
     readlinesensors(maze, l, m, r);
     if (!l && m && r) {
+      printf("exit left turn - back to follow line\n");
       mode = FOLLOW_LINE;
     }
     
   }
 
-  void turn_right(int& mode, Maze& maze)
+  void turn_right(Maze& maze)
   {
     (void) mode;
     double turn_speed = M_PI/200;
@@ -123,11 +131,12 @@ struct Car {
     bool l,m,r;
     readlinesensors(maze, l, m, r);
     if (l && m && !r) {
+      printf("exit right turn - back to follow line\n");
       mode = FOLLOW_LINE;
     }
   }
   
-  void follow_line(int& mode, Maze& maze)
+  void follow_line(Maze& maze)
   {
     (void) mode;
     
@@ -135,7 +144,6 @@ struct Car {
     
     bool l,m,r;
     readlinesensors(maze, l, m, r);
-    printf("l=%d, m=%d, r=%d\n",l,m,r);
 
     going_straight = false;
     if (l && m && !r)  {
@@ -170,13 +178,13 @@ struct Car {
     forward();
   }
 
-  void move_up(int& mode, Maze& maze)
+  void move_up(Maze& maze)
   {
     uint32_t cur_ticks = SDL_GetTicks();
     double elapsed_moving_up =  (cur_ticks - moving_up_start_ticks) / 1000.0; // Convert to secs
-
+    
     if (elapsed_moving_up > MOVE_UP_TIME) {
-      printf("MOVE UP TIMEOUT\n");
+      printf("exit moving up - entering next_turn %d\n",next_turn);
       if (next_turn == -1) mode = MAKING_LEFT_TURN;
       if (next_turn == +1) mode = MAKING_RIGHT_TURN;
       return;
@@ -185,137 +193,163 @@ struct Car {
     forward();
 
     (void) maze;
-    // bool l,m,r;
-    // readlinesensors(maze, l, m, r);
-    // if (!l && !m && !r) {
-    //   if (next_turn == -1) mode = MAKING_LEFT_TURN;
-    //   if (next_turn == +1) mode = MAKING_RIGHT_TURN;
-    // }
   }
 
-  void check_left(int& mode, Maze& maze, double elapsed_time)
+  // void check_left(Maze& maze, double elapsed_time)
+  // {
+  //   if (!going_straight) return;
+    
+  //   (void) elapsed_time;
+  //   printf("checking left\n");
+
+  //   distsen.rot = -1;
+  //   double dist = readdistancesensor(maze);
+  //   printf("left dist = %f\n",dist);
+  //   if (dist < 60) {
+  //     left_wall_detected = true;
+  //   }
+  //   else {
+  //     left_wall_detected = false;
+  //   }
+
+  //   printf("left wall detected? %d\n",left_wall_detected);
+  //   if (left_wall_detected) {
+
+  //     printf(" -- front wall detected? %d\n",front_wall_detected);
+  //     if (front_wall_detected) {
+  // 	front_wall_detected = false;
+  // 	printf(" -- change mode to right turn\n");
+  // 	mode = MOVING_UP;
+  // 	moving_up_start_ticks = SDL_GetTicks();
+  // 	next_turn = +1;
+  // 	return;
+  //     }
+  //     else {
+  // 	printf(" -- change mode to follow line\n");
+  // 	mode = FOLLOW_LINE;
+  // 	return;
+  //     }
+  //   }
+  //   else {
+  //     mode = MOVING_UP;
+  //     moving_up_start_ticks = SDL_GetTicks();
+  //     next_turn = -1;
+  //     return;
+  //   }
+  // }
+
+  // void check_front(Maze& maze, double elapsed_time)
+  // {
+  //   if (!going_straight) return;
+
+  //   printf("checking front\n");
+  //   distsen.rot = 0;
+  //   double dist = readdistancesensor(maze);
+  //   printf("dist = %f\n",dist);
+
+  //   if (dist < 60) {
+  //     front_wall_detected = true;
+  //   }
+  //   else {
+  //     front_wall_detected = false;
+  //   }
+      
+  //   (void) maze;
+  //   (void) mode;
+  //   (void) elapsed_time;
+  // }
+
+  void sense_walls(Maze& maze)
   {
+    static bool sense_left = true;
+
+    // only take measurements when straight
     if (!going_straight) return;
     
-    (void) elapsed_time;
-    printf("checking left\n");
+    if (sense_left) {
 
-    distsen.rot = -1;
-    double dist = readdistancesensor(maze);
-    printf("left dist = %f\n",dist);
-    if (dist < 60) {
-      left_wall_detected = true;
-    }
-    else {
-      left_wall_detected = false;
-    }
+      bool facing_left = distsen.faceLeft();
 
-    printf("left wall detected? %d\n",left_wall_detected);
-    if (left_wall_detected) {
+      if (facing_left) {
 
-      printf(" -- front wall detected? %d\n",front_wall_detected);
-      if (front_wall_detected) {
-	front_wall_detected = false;
-	printf(" -- change mode to right turn\n");
-	mode = MOVING_UP;
-	moving_up_start_ticks = SDL_GetTicks();
-	next_turn = +1;
-	return;
-      }
-      else {
-	printf(" -- change mode to follow line\n");
-	mode = FOLLOW_LINE;
-	return;
+	double dist = readdistancesensor(maze);
+	printf("left dist: %f\n",dist);
+	
+	left_wall_detected = false;
+	if (dist < 60) {
+	  left_wall_detected = true;
+	}
+
+	sense_left = false;
       }
     }
-    else {
-      mode = MOVING_UP;
-      moving_up_start_ticks = SDL_GetTicks();
-      next_turn = -1;
-      return;
-    }
-  }
 
-  void check_front(int& mode, Maze& maze, double elapsed_time)
-  {
-    if (!going_straight) return;
-
-    printf("checking front\n");
-    distsen.rot = 0;
-    double dist = readdistancesensor(maze);
-    printf("dist = %f\n",dist);
-
-    if (dist < 60) {
-      front_wall_detected = true;
-    }
-    else {
-      front_wall_detected = false;
-    }
+    // sense front
+    if (!sense_left) {
       
-    (void) maze;
-    (void) mode;
-    (void) elapsed_time;
+      bool facing_front = distsen.faceFront();
+      
+      if (facing_front) {
+	double dist = readdistancesensor(maze);
+	printf("front dist: %f\n",dist);
+	
+	front_wall_detected = false;
+	if (dist < 60) {
+	  front_wall_detected = true;
+	}
+	
+	sense_left = true;
+      }
+    }
   }
   
   void control(Maze& maze, double elapsed_time)
   {
     (void) elapsed_time;
-    
-    static int mode = FOLLOW_LINE;
 
+    // update front_wall_detected and left_wall_detected
+    sense_walls(maze);
+
+    // update mode based on wall sensing
+    if (left_wall_detected) {
+      if (front_wall_detected) {
+	if (mode == FOLLOW_LINE) {
+	  mode = MOVING_UP;
+	  moving_up_start_ticks = SDL_GetTicks();
+	  next_turn = +1;
+	}
+      }
+      else {
+  	mode = FOLLOW_LINE;
+      }
+    }
+    else {
+      if (mode == FOLLOW_LINE) {
+	mode = MOVING_UP;
+	moving_up_start_ticks = SDL_GetTicks();
+	next_turn = -1;
+      }
+    }
+    
     switch (mode) {
       
     case FOLLOW_LINE:
       printf("mode is follow line %d\n",mode);
-      follow_line(mode, maze);
-      check_left(mode, maze, elapsed_time);
-      check_front(mode, maze, elapsed_time);
+      follow_line(maze);
       break;
     case MAKING_LEFT_TURN:
       printf("mode is making left turn %d\n",mode);
-      turn_left(mode, maze);
+      turn_left(maze);
       break;
     case MAKING_RIGHT_TURN:
       printf("mode is making right turn %d\n",mode);
-      turn_right(mode, maze);
+      turn_right(maze);
       break;
     case MOVING_UP:
       printf("mode is moving up %d\n",mode);
-      move_up(mode, maze);
-      break;
-    case CHECKING_LEFT:
-      printf("mode is checking left %d\n",mode);
-      check_left(mode, maze, elapsed_time);
-      break;
-    case CHECKING_FRONT:
-      printf("mode is checking front %d\n",mode);
-      check_front(mode, maze, elapsed_time);
+      move_up(maze);
       break;
     }
-    
-    // if (check_front) {
-    //   if (distsen.rot == -1) distsen.rot = 0;
-    // }
-    // else {
-
-    //   // check for left wall
-    //   if (distsen.rot != -1) distsen.rot = -1;
-    //   double dist = readdistancesensor(maze);
-
-    //   dist < 75 ? left_wall_detected = true : left_wall_detected = false;
-
-    //   if (!left_wall_detected) {
-    // 	forward_clear_corner();
-    // 	turn_left();
-    //   }
-      
-      
-    // double dist = readdistancesensor(maze);
-    // printf("dist = %f\n",dist);
-
-    // if (elapsed_time > 3.0) {
-    //   distsen.rot = 0;
-    // }
   }
 
   double x,y;
@@ -366,7 +400,87 @@ struct Car {
     SDL_FreeSurface(surface);
   }
 
-  void draw(SDL_Renderer* renderer) {
+
+  void annotate(SDL_Renderer* renderer, TTF_Font* font) {
+
+    SDL_Color textColor = {255, 255, 255, 255};  // White color for text
+
+    string mode1;
+    if (mode == FOLLOW_LINE) mode1 = "follow line";
+    if (mode == MAKING_LEFT_TURN) mode1 = "left turn";
+    if (mode == MAKING_RIGHT_TURN) mode1 = "right turn";
+    if (mode == MOVING_UP) mode1 = "moving up";
+    if (mode == CHECKING_LEFT) mode1 = "check left";
+    if (mode == CHECKING_FRONT) mode1 = "check front";
+
+    {
+      std::string segText = "mode: " +mode1;
+      
+      SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
+      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+      
+      int textWidth, textHeight;
+      SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
+      
+      SDL_Rect dst = { 650 - textWidth / 2, 100 - textHeight / 2, textWidth, textHeight};
+      SDL_RenderCopy(renderer, texture, NULL, &dst);
+
+      SDL_FreeSurface(surface);
+      SDL_DestroyTexture(texture);
+    }
+
+    {
+      std::string segText = "front detect: " +to_string(front_wall_detected);
+      
+      SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
+      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+      
+      int textWidth, textHeight;
+      SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
+      
+      SDL_Rect dst = { 650 - textWidth / 2, 150 - textHeight / 2, textWidth, textHeight};
+      SDL_RenderCopy(renderer, texture, NULL, &dst);
+      SDL_FreeSurface(surface);
+      SDL_DestroyTexture(texture);
+    }
+
+    {
+      std::string segText = "left detect: " +to_string(left_wall_detected);
+      
+      SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
+      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+      
+      int textWidth, textHeight;
+      SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
+      
+      SDL_Rect dst = { 650 - textWidth / 2, 200 - textHeight / 2, textWidth, textHeight};
+      SDL_RenderCopy(renderer, texture, NULL, &dst);
+      SDL_FreeSurface(surface);
+      SDL_DestroyTexture(texture);
+    }
+
+    {
+      string dir;
+      if (distsen.last_rot == -1) dir = "left";
+      if (distsen.last_rot == 0) dir = "front";
+      std::string segText = "last dist: " +dir;
+      
+      SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
+      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+      
+      int textWidth, textHeight;
+      SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
+      
+      SDL_Rect dst = { 650 - textWidth / 2, 250 - textHeight / 2, textWidth, textHeight};
+      SDL_RenderCopy(renderer, texture, NULL, &dst);
+      SDL_FreeSurface(surface);
+      SDL_DestroyTexture(texture);
+    }
+    
+  }
+  
+
+  void draw(SDL_Renderer* renderer, TTF_Font* font) {
 
     // Draw the texture at x,y as the center, rotated by theta degrees
     SDL_Rect destRect;
@@ -408,7 +522,6 @@ struct Car {
     SDL_RenderDrawPoint(renderer, x+1, y);
     SDL_RenderDrawPoint(renderer, x, y-1);
     SDL_RenderDrawPoint(renderer, x, y+1);
-    
 
     // Render the ray from ultrasonic sensor to wall
     SDL_SetRenderDrawColor(renderer, 0, 255, 255, 255); // color
@@ -422,7 +535,8 @@ struct Car {
     SDL_RenderDrawPoint(renderer, r.direction.x+1, r.direction.y);
     SDL_RenderDrawPoint(renderer, r.direction.x, r.direction.y-1);
     SDL_RenderDrawPoint(renderer, r.direction.x, r.direction.y+1);
-    
+
+    annotate(renderer, font);
   }
 
   ~Car() {

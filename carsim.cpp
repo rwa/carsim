@@ -155,8 +155,10 @@ int main()
 
     // Draw
     maze.draw(renderer, font);
-    car.draw(renderer);
+    car.draw(renderer, font);
 
+    // annotate(renderer, font);
+    
     // // Test ray/seg intersect
     // double x0 = 280;
     // double x1 = 280;
