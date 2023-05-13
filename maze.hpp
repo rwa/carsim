@@ -106,15 +106,15 @@ struct Segment {
 
       SDL_Rect rect = {x0-hw, y0, hw*2, y1-y0};
       
-      if (id==26 || id==17) {
-	printf("checking (%d,%d) intersects with vertical seg %d\n",x,y,id);
-	printf("rect (%d,%d),(%d,%d)\n",rect.x,rect.y,rect.x+rect.w,rect.y+rect.h);
-	printf("point (%d,%d)\n",p.x,p.y);
-      }
+      // if (id==26 || id==17) {
+      // 	printf("checking (%d,%d) intersects with vertical seg %d\n",x,y,id);
+      // 	printf("rect (%d,%d),(%d,%d)\n",rect.x,rect.y,rect.x+rect.w,rect.y+rect.h);
+      // 	printf("point (%d,%d)\n",p.x,p.y);
+      // }
       intersects = SDL_PointInRect(&p, &rect);
-      if (id==26 || id==17) {
-	printf("intersects=%d\n",intersects);
-      }
+      // if (id==26 || id==17) {
+      // 	printf("intersects=%d\n",intersects);
+      // }
     }
     if (horizontal) {
       SDL_Rect rect = {x0-hw, y0-hw, x1-x0+hw*2, hw*2};

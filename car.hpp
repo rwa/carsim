@@ -39,15 +39,15 @@ struct Car {
     double u = 1.0;
     double dt = 0.1;
     
-    x += u*cos(theta)*dt;
-    y += u*sin(theta)*dt;
+    x += u*sin(theta)*dt;
+    y += u*cos(theta)*dt;
   }
 
   void readlinesensors(Maze& maze, bool& l, bool& m, bool& r)
   {
-    //l = maze.detectPath(lsen.getWorldX(), lsen.getWorldY());
+    l = maze.detectPath(lsen.getWorldX(), lsen.getWorldY());
     m = maze.detectPath(msen.getWorldX(), msen.getWorldY());
-    //r = maze.detectPath(rsen.getWorldX(), rsen.getWorldY());
+    r = maze.detectPath(rsen.getWorldX(), rsen.getWorldY());
   }
 
   void control(Maze& maze)
@@ -66,7 +66,15 @@ struct Car {
   double l = 65;
   
   double x,y;
-  double theta = -M_PI/2;
+
+  double r = static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+
+  double theta_rand = 0.0;
+  // double theta_rand = 0.1*r*M_PI;
+
+  //printf("theta_rand = %f\n",theta_rand);
+  
+  double theta = 0 +theta_rand;
 
   // locations of line sensors relative to center x,y
   double ss = 6; // sensor size
@@ -126,7 +134,7 @@ struct Car {
     destRect.y = y-l/2.0;
     destRect.w = w;
     destRect.h = l;
-    SDL_RenderCopyEx(renderer, texture, NULL, &destRect, theta, NULL, SDL_FLIP_NONE);
+    SDL_RenderCopyEx(renderer, texture, NULL, &destRect, theta*180./M_PI, NULL, SDL_FLIP_NONE);
   }
 
   ~Car() {

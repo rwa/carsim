@@ -6,6 +6,9 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 
+#include <cstdlib>
+#include <ctime>
+
 #include <cmath>
 #include <iostream>
 #include <fstream>
@@ -69,7 +72,8 @@ const int WINDOW_HEIGHT = 600;
 
 int main()
 {
-
+  std::srand(std::time(0)); // Use current time as seed for random generator
+  
   Maze maze = parseMaze();
   
   // Initialize SDL
