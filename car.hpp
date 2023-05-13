@@ -13,8 +13,8 @@ struct Car {
   Car(SDL_Renderer* renderer) {
     x = 0.5*CELL_SIZE;
     y = 3.5*CELL_SIZE;
-    createTexture(renderer);
 
+    // These coordinates are relative to car center
     int size = 6;
     lsen.x = -0.2*w;
     lsen.y = -l/2.0;
@@ -30,6 +30,8 @@ struct Car {
     rsen.y = -l/2.0;
     rsen.size = size;
     rsen.car = this;
+    
+    createTexture(renderer);
   }
 
   void forward()
@@ -43,15 +45,19 @@ struct Car {
 
   void readlinesensors(Maze& maze, bool& l, bool& m, bool& r)
   {
-    l = maze.detectPath(lsen.getWorldX(), lsen.getWorldY());
+    //l = maze.detectPath(lsen.getWorldX(), lsen.getWorldY());
     m = maze.detectPath(msen.getWorldX(), msen.getWorldY());
-    r = maze.detectPath(rsen.getWorldX(), rsen.getWorldY());
+    //r = maze.detectPath(rsen.getWorldX(), rsen.getWorldY());
   }
 
   void control(Maze& maze)
   {
     bool l,m,r;
+    l = false;
+    m = false;
+    r = false;
     readlinesensors(maze, l, m, r);
+    printf("l=%d, m=%d, r=%d\n",l,m,r);
     
     forward();
   }
@@ -91,28 +97,15 @@ struct Car {
     SDL_RenderDrawLine(softwareRenderer, width / 2, 10, width - 10, height - 10); // right edge
     SDL_RenderDrawLine(softwareRenderer, 10, height - 10, width - 10, height - 10); // base
 
-    // Draw the sensor locations as small squares
-    SDL_Rect destRect;
-    destRect.x = w/2.0 +dxl -ss/2.0;
-    destRect.y = l/2.0 +dyl;
-    destRect.w = ss;
-    destRect.h = ss;
+    // Draw the sensor locations as rgb dots
     SDL_SetRenderDrawColor(softwareRenderer, 255, 0, 0, 255); // red
-    SDL_RenderFillRect(softwareRenderer, &destRect);
+    SDL_RenderDrawPoint(softwareRenderer, w/2.0 +lsen.x, l/2.0 +lsen.y);
 
-    destRect.x = w/2.0 +dxm -ss/2.0;
-    destRect.y = l/2.0 +dym;
-    destRect.w = ss;
-    destRect.h = ss;
     SDL_SetRenderDrawColor(softwareRenderer, 0, 255, 0, 255); // green
-    SDL_RenderFillRect(softwareRenderer, &destRect);
-    
-    destRect.x = w/2.0 +dxr -ss/2.0;
-    destRect.y = l/2.0 +dyr;
-    destRect.w = ss;
-    destRect.h = ss;
+    SDL_RenderDrawPoint(softwareRenderer, w/2.0 +msen.x, l/2.0 +msen.y);
+
     SDL_SetRenderDrawColor(softwareRenderer, 0, 0, 255, 255); // blue
-    SDL_RenderFillRect(softwareRenderer, &destRect);
+    SDL_RenderDrawPoint(softwareRenderer, w/2.0 +rsen.x, l/2.0 +rsen.y);
     
     // Update the surface with what's been drawn
     SDL_RenderPresent(softwareRenderer);

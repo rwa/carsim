@@ -7,7 +7,7 @@ LDLIBS = `sdl2-config --libs` -lSDL2_ttf
 MAIN = simcar
 
 # define the C++ source files
-SRCS = linesensor.cpp carsim.cpp
+SRCS = linesensor.cpp maze.cpp carsim.cpp
 
 # define the C++ object files 
 OBJS = $(SRCS:.cpp=.o)
