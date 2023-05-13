@@ -40,7 +40,7 @@ struct Car {
     double dt = 0.1;
     
     x += u*sin(theta)*dt;
-    y += u*cos(theta)*dt;
+    y -= u*cos(theta)*dt;
   }
 
   void readlinesensors(Maze& maze, bool& l, bool& m, bool& r)
@@ -53,9 +53,6 @@ struct Car {
   void control(Maze& maze)
   {
     bool l,m,r;
-    l = false;
-    m = false;
-    r = false;
     readlinesensors(maze, l, m, r);
     printf("l=%d, m=%d, r=%d\n",l,m,r);
     
@@ -69,22 +66,8 @@ struct Car {
 
   double r = static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
 
-  double theta_rand = 0.0;
-  // double theta_rand = 0.1*r*M_PI;
-
-  //printf("theta_rand = %f\n",theta_rand);
-  
+  double theta_rand = 0.05*r*M_PI;
   double theta = 0 +theta_rand;
-
-  // locations of line sensors relative to center x,y
-  double ss = 6; // sensor size
-  double dxl = -0.2*w;
-  double dxm = 0.0;
-  double dxr = +0.2*w;
-
-  double dyl = -l/2.0;
-  double dym = -l/2.0;
-  double dyr = -l/2.0;
 
   SDL_Texture* texture;
 
