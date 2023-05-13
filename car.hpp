@@ -12,10 +12,10 @@ using namespace std;
 #define MAKING_LEFT_TURN 1
 #define MAKING_RIGHT_TURN 2
 #define MOVING_UP 3
-#define CHECKING_LEFT 4
-#define CHECKING_FRONT 5
 
-#define MOVE_UP_TIME 0.75
+#define MOVE_UP_TIME 1.0
+#define FRONT_DIST 75
+#define LEFT_DIST 75
 
 struct Car {
 
@@ -68,7 +68,7 @@ struct Car {
   void forward()
   {
     double u = 1.0;
-    double dt = 0.2;
+    double dt = 0.15;
     
     x += u*sin(theta)*dt;
     y -= u*cos(theta)*dt;
@@ -119,7 +119,8 @@ struct Car {
       printf("exit left turn - back to follow line\n");
       mode = FOLLOW_LINE;
     }
-    
+
+    going_straight = false;
   }
 
   void turn_right(Maze& maze)
@@ -134,6 +135,8 @@ struct Car {
       printf("exit right turn - back to follow line\n");
       mode = FOLLOW_LINE;
     }
+
+    going_straight = false;
   }
   
   void follow_line(Maze& maze)
@@ -144,35 +147,36 @@ struct Car {
     
     bool l,m,r;
     readlinesensors(maze, l, m, r);
-
+    //printf("%d %d %d\n",l,m,r);
+    
     going_straight = false;
     if (l && m && !r)  {
-      printf("110: steer left\n");
+      //printf("110: steer left\n");
       theta -= steer_amount;
     }
     if (l && !m && !r) {
-      printf("100: steer left\n");
+      //printf("100: steer left\n");
       theta -= steer_amount;
     }
     if (!l && m && r)  {
-      printf("011: steer right\n");
+      //printf("011: steer right\n");
       theta += steer_amount;
     }
     if (!l && !m && r) {
-      printf("001: steer right\n");
+      //printf("001: steer right\n");
       theta += steer_amount;
     }
     if (!l && m && !r) {
-      printf("010: forward\n");
+      //printf("010: forward\n");
       forward();
       going_straight = true;
     }
     if (l && m && r) {
-      printf("111: forward?\n");
+      //printf("111: forward?\n");
       forward();
     }
     if (!l && !m && !r) {
-      printf("000: forward?\n");
+      //printf("000: forward?\n");
       forward();
     }
     forward();
@@ -195,76 +199,12 @@ struct Car {
     (void) maze;
   }
 
-  // void check_left(Maze& maze, double elapsed_time)
-  // {
-  //   if (!going_straight) return;
-    
-  //   (void) elapsed_time;
-  //   printf("checking left\n");
-
-  //   distsen.rot = -1;
-  //   double dist = readdistancesensor(maze);
-  //   printf("left dist = %f\n",dist);
-  //   if (dist < 60) {
-  //     left_wall_detected = true;
-  //   }
-  //   else {
-  //     left_wall_detected = false;
-  //   }
-
-  //   printf("left wall detected? %d\n",left_wall_detected);
-  //   if (left_wall_detected) {
-
-  //     printf(" -- front wall detected? %d\n",front_wall_detected);
-  //     if (front_wall_detected) {
-  // 	front_wall_detected = false;
-  // 	printf(" -- change mode to right turn\n");
-  // 	mode = MOVING_UP;
-  // 	moving_up_start_ticks = SDL_GetTicks();
-  // 	next_turn = +1;
-  // 	return;
-  //     }
-  //     else {
-  // 	printf(" -- change mode to follow line\n");
-  // 	mode = FOLLOW_LINE;
-  // 	return;
-  //     }
-  //   }
-  //   else {
-  //     mode = MOVING_UP;
-  //     moving_up_start_ticks = SDL_GetTicks();
-  //     next_turn = -1;
-  //     return;
-  //   }
-  // }
-
-  // void check_front(Maze& maze, double elapsed_time)
-  // {
-  //   if (!going_straight) return;
-
-  //   printf("checking front\n");
-  //   distsen.rot = 0;
-  //   double dist = readdistancesensor(maze);
-  //   printf("dist = %f\n",dist);
-
-  //   if (dist < 60) {
-  //     front_wall_detected = true;
-  //   }
-  //   else {
-  //     front_wall_detected = false;
-  //   }
-      
-  //   (void) maze;
-  //   (void) mode;
-  //   (void) elapsed_time;
-  // }
-
   void sense_walls(Maze& maze)
   {
     static bool sense_left = true;
 
-    // only take measurements when straight
-    if (!going_straight) return;
+    // // only take measurements when straight
+    // if (!going_straight) return;
     
     if (sense_left) {
 
@@ -276,7 +216,7 @@ struct Car {
 	printf("left dist: %f\n",dist);
 	
 	left_wall_detected = false;
-	if (dist < 60) {
+	if (dist < LEFT_DIST) {
 	  left_wall_detected = true;
 	}
 
@@ -294,7 +234,8 @@ struct Car {
 	printf("front dist: %f\n",dist);
 	
 	front_wall_detected = false;
-	if (dist < 60) {
+	if (dist < FRONT_DIST) {
+	  printf("FRONT WALL DETECT\n");
 	  front_wall_detected = true;
 	}
 	
@@ -311,42 +252,41 @@ struct Car {
     sense_walls(maze);
 
     // update mode based on wall sensing
-    if (left_wall_detected) {
-      if (front_wall_detected) {
-	if (mode == FOLLOW_LINE) {
+    if (mode == FOLLOW_LINE) {
+      if (left_wall_detected) {
+	if (front_wall_detected) {
+	  printf("START MOVING UP FOR RIGHT TURN\n");
 	  mode = MOVING_UP;
 	  moving_up_start_ticks = SDL_GetTicks();
 	  next_turn = +1;
+	  front_wall_detected = false;
 	}
       }
       else {
-  	mode = FOLLOW_LINE;
-      }
-    }
-    else {
-      if (mode == FOLLOW_LINE) {
+	printf("START MOVING UP FOR LEFT TURN\n");
 	mode = MOVING_UP;
 	moving_up_start_ticks = SDL_GetTicks();
 	next_turn = -1;
+	front_wall_detected = false;
       }
     }
     
     switch (mode) {
       
     case FOLLOW_LINE:
-      printf("mode is follow line %d\n",mode);
+      //printf("mode is follow line %d\n",mode);
       follow_line(maze);
       break;
     case MAKING_LEFT_TURN:
-      printf("mode is making left turn %d\n",mode);
+      //printf("mode is making left turn %d\n",mode);
       turn_left(maze);
       break;
     case MAKING_RIGHT_TURN:
-      printf("mode is making right turn %d\n",mode);
+      //printf("mode is making right turn %d\n",mode);
       turn_right(maze);
       break;
     case MOVING_UP:
-      printf("mode is moving up %d\n",mode);
+      // printf("mode is moving up %d\n",mode);
       move_up(maze);
       break;
     }
@@ -410,8 +350,6 @@ struct Car {
     if (mode == MAKING_LEFT_TURN) mode1 = "left turn";
     if (mode == MAKING_RIGHT_TURN) mode1 = "right turn";
     if (mode == MOVING_UP) mode1 = "moving up";
-    if (mode == CHECKING_LEFT) mode1 = "check left";
-    if (mode == CHECKING_FRONT) mode1 = "check front";
 
     {
       std::string segText = "mode: " +mode1;
@@ -472,6 +410,20 @@ struct Car {
       SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
       
       SDL_Rect dst = { 650 - textWidth / 2, 250 - textHeight / 2, textWidth, textHeight};
+      SDL_RenderCopy(renderer, texture, NULL, &dst);
+      SDL_FreeSurface(surface);
+      SDL_DestroyTexture(texture);
+    }
+    {
+      std::string segText = "going straight: " +to_string(going_straight);
+      
+      SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
+      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+      
+      int textWidth, textHeight;
+      SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
+      
+      SDL_Rect dst = { 650 - textWidth / 2, 300 - textHeight / 2, textWidth, textHeight};
       SDL_RenderCopy(renderer, texture, NULL, &dst);
       SDL_FreeSurface(surface);
       SDL_DestroyTexture(texture);
