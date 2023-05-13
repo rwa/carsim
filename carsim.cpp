@@ -141,6 +141,53 @@ int main()
     // Draw
     maze.draw(renderer, font);
     car.draw(renderer);
+
+    // // Test ray/seg intersect
+    // double x0 = 280;
+    // double x1 = 280;
+    // double y0 = 100;
+    // double y1 = 300;
+    
+    // Point p0(x0,y0);
+    // Point p1(x1,y1);
+    // LineSeg seg(p1,p0);
+
+    // SDL_SetRenderDrawColor(renderer, 255, 0, 0, 100); // Set color to red
+    // SDL_RenderDrawLine(renderer, x0, y0, x1, y1);
+
+    // double x = 200;
+    // double y = 200;
+    // static double theta = 0;
+    // theta += 0.01;
+    
+    // // double theta = M_PI;
+
+    // double dx = cos(theta);
+    // double dy = sin(theta);
+    
+    // Point r0(x,y);
+    // Point r1(dx,dy);
+    // Ray r(r0,r1);
+
+    // // Ray is blue
+    // SDL_SetRenderDrawColor(renderer, 0, 0, 255, 100); // Set color to blue
+    // SDL_Rect rect = {x-5,y-5,10,10};
+    // SDL_RenderFillRect(renderer, &rect);
+    // SDL_RenderDrawLine(renderer, x, y, x+50*dx, y+50*dy);
+    
+    // std::optional<Point> pt = getIntersection(r, seg);
+    // // std::optional<Point> pt = RayLineSegIntersect(r, seg);
+
+    // if (pt) {
+    //   printf("INTERSECT\n");
+    //   SDL_SetRenderDrawColor(renderer, 0, 255, 0, 100); // Set color to green
+    //   SDL_RenderDrawLine(renderer, pt->x-4, pt->y-4, pt->x+4, pt->y+4);
+    //   SDL_RenderDrawLine(renderer, pt->x+4, pt->y-4, pt->x-4, pt->y+4);
+    // }
+    // else {
+    //   printf("no intersect\n");
+    // }
+
     
     // Update the window
     SDL_RenderPresent(renderer);

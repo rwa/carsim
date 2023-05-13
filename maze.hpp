@@ -5,6 +5,8 @@
 
 #include <vector>
 #include <string>
+#include <optional>
+#include <utility>
 using namespace std;
 
 #define FONT_SIZE 24
@@ -12,9 +14,9 @@ using namespace std;
 #define WALL_THICKNESS 2
 
 struct Wall {
-    int i;
-    int j;
-    Wall(int i, int j) : i(i), j(j) {}
+  int i;
+  int j;
+  Wall(int i, int j) : i(i), j(j) {}
 };
 
 struct Cell {
@@ -137,6 +139,30 @@ struct Segment {
 
   
 };
+
+struct Point {
+  Point() {};
+  Point(double x_, double y_) : x(x_), y(y_) {};
+  double x;
+  double y;
+};
+
+// Ray data structure.
+struct Ray {
+  Ray() {};
+  Ray(Point o, Point dir) : origin(o), direction(dir) {};
+  Point origin, direction;
+};
+
+// LineSeg data structure.
+struct LineSeg {
+
+  LineSeg(Point& p0, Point& p1) : start(p0), end(p1) {};
+  Point start, end;
+};
+
+//std::optional<Point> RayLineSegIntersect(const Ray& ray, const LineSeg& segment);
+std::optional<Point> getIntersection(const Ray& ray, const LineSeg& segment);
 
 class Maze {
 
@@ -277,6 +303,65 @@ public:
       if (it.intersects(x,y)) intersection = true;
     }
     return intersection;
+  }
+
+  double distanceToClosestWall(int x, int y, double dx, double dy, Point& minpt)
+  {
+    double mindist = 1e6;
+
+    Point r0(x,y);
+    Point r1(dx,dy);
+    Ray r(r0,r1);
+    
+    // vertwalls
+    for (auto& it: vWalls) {
+      double x0 = it.i*CELL_SIZE;
+      double x1 = x0;
+      double y0 = it.j*CELL_SIZE;
+      double y1 = y0+CELL_SIZE;
+
+      Point p0(x0,y0);
+      Point p1(x1,y1);
+      LineSeg seg(p0,p1);
+
+      std::optional<Point> pt = getIntersection(r, seg);
+      if (pt) {
+	printf("found intersection with vert wall\n");
+	double dx = pt->x -x;
+	double dy = pt->y -y;
+	double dist = sqrt(dx*dx +dy*dy);
+	if (dist < mindist) {
+	  mindist = dist;
+	  minpt = *pt;
+	}
+      }
+    }
+
+    // horiz walls
+    for (auto& it: hWalls) {
+      double x0 = it.i*CELL_SIZE;
+      double x1 = x0+CELL_SIZE;
+      double y0 = it.j*CELL_SIZE;
+      double y1 = y0;
+
+      Point p0(x0,y0);
+      Point p1(x1,y1);
+      LineSeg seg(p0,p1);
+
+      std::optional<Point> pt = getIntersection(r, seg);
+      if (pt) {
+	printf("found intersection with horiz wall\n");
+	double dx = pt->x-x;
+	double dy = pt->y-y;
+	double dist = sqrt(dx*dx+dy*dy);
+	if (dist < mindist) {
+	  mindist = dist;
+	  minpt = *pt;
+	}
+      }
+    }
+    
+    return mindist;
   }
   
   void print() {

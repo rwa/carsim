@@ -2,6 +2,7 @@
 #include <SDL.h>
 
 #include "linesensor.hpp"
+#include "distsensor.hpp"
 #include "maze.hpp"
 
 struct Car {
@@ -9,6 +10,10 @@ struct Car {
   LineSensor lsen;
   LineSensor msen;
   LineSensor rsen;
+
+  DistSensor distsen;
+
+  Ray lastray;
 
   double w = 40;
   double l = 45;
@@ -29,6 +34,11 @@ struct Car {
     rsen.x = +0.15*w;
     rsen.y = -l/2.0;
     rsen.car = this;
+
+    distsen.x = 0;
+    distsen.y = 0;
+    distsen.pos = -1;
+    distsen.car = this;
     
     createTexture(renderer);
   }
@@ -49,6 +59,26 @@ struct Car {
     r = maze.detectPath(rsen.getWorldX(theta), rsen.getWorldY(theta));
   }
 
+  double readdistancesensor(Maze& maze)
+  {
+    int x = distsen.getWorldX(theta);
+    int y = distsen.getWorldY(theta);
+    double sensor_theta = distsen.getWorldTheta();
+
+    double dx = cos(sensor_theta);
+    double dy = sin(sensor_theta);
+
+    Point p(0,0);
+    double dist = maze.distanceToClosestWall(x, y, dx, dy, p);
+
+    lastray.origin.x = x;
+    lastray.origin.y = y;
+    lastray.direction.x = p.x;
+    lastray.direction.y = p.y;
+    
+    return dist;
+  }
+
   void control(Maze& maze)
   {
     double steer_amount = 0.001*M_PI;
@@ -58,7 +88,6 @@ struct Car {
     printf("l=%d, m=%d, r=%d\n",l,m,r);
     
     forward();
-    printf("theta = %f\n",theta);
     if (l && m && !r)  {
       printf("110: steer left\n");
       theta -= steer_amount;
@@ -75,7 +104,9 @@ struct Car {
       printf("001: steer hard right\n");
       theta += steer_amount;
     }
-    printf("theta now %f\n",theta);
+
+    double dist = readdistancesensor(maze);
+    printf("dist = %f\n",dist);
   }
 
   double x,y;
@@ -105,14 +136,15 @@ struct Car {
     SDL_RenderDrawLine(softwareRenderer, 10, height - 10, width - 10, height - 10); // base
 
     // Draw the sensor locations as rgb dots
-    SDL_SetRenderDrawColor(softwareRenderer, 255, 0, 0, 255); // red
-    SDL_RenderDrawPoint(softwareRenderer, w/2.0 +lsen.x, l/2.0 +lsen.y);
+    // Do this outside of here so that we can check the rotation calc
+    // SDL_SetRenderDrawColor(softwareRenderer, 255, 0, 0, 255); // red
+    // SDL_RenderDrawPoint(softwareRenderer, w/2.0 +lsen.x, l/2.0 +lsen.y);
 
-    SDL_SetRenderDrawColor(softwareRenderer, 0, 255, 0, 255); // green
-    SDL_RenderDrawPoint(softwareRenderer, w/2.0 +msen.x, l/2.0 +msen.y);
+    // SDL_SetRenderDrawColor(softwareRenderer, 0, 255, 0, 255); // green
+    // SDL_RenderDrawPoint(softwareRenderer, w/2.0 +msen.x, l/2.0 +msen.y);
 
-    SDL_SetRenderDrawColor(softwareRenderer, 0, 0, 255, 255); // blue
-    SDL_RenderDrawPoint(softwareRenderer, w/2.0 +rsen.x, l/2.0 +rsen.y);
+    // SDL_SetRenderDrawColor(softwareRenderer, 0, 0, 255, 255); // blue
+    // SDL_RenderDrawPoint(softwareRenderer, w/2.0 +rsen.x, l/2.0 +rsen.y);
     
     // Update the surface with what's been drawn
     SDL_RenderPresent(softwareRenderer);
@@ -157,12 +189,30 @@ struct Car {
     SDL_RenderDrawPoint(renderer, rsen.getWorldX(theta), rsen.getWorldY(theta)+1);
     SDL_RenderDrawPoint(renderer, rsen.getWorldX(theta)-1, rsen.getWorldY(theta));
     SDL_RenderDrawPoint(renderer, rsen.getWorldX(theta), rsen.getWorldY(theta)-1);
-    
-    // SDL_SetRenderDrawColor(softwareRenderer, 0, 255, 0, 255); // green
-    // SDL_RenderDrawPoint(softwareRenderer, w/2.0 +msen.x, l/2.0 +msen.y);
 
-    // SDL_SetRenderDrawColor(softwareRenderer, 0, 0, 255, 255); // blue
-    // SDL_RenderDrawPoint(softwareRenderer, w/2.0 +rsen.x, l/2.0 +rsen.y);
+    // Draw the location of the ultrasonic sensor
+    int x = distsen.getWorldX(theta);
+    int y = distsen.getWorldY(theta);
+    SDL_SetRenderDrawColor(renderer, 100, 40, 100, 255); // color
+    SDL_RenderDrawPoint(renderer, x, y);
+    SDL_RenderDrawPoint(renderer, x-1, y);
+    SDL_RenderDrawPoint(renderer, x+1, y);
+    SDL_RenderDrawPoint(renderer, x, y-1);
+    SDL_RenderDrawPoint(renderer, x, y+1);
+    
+
+    // Render the ray from ultrasonic sensor to wall
+    SDL_SetRenderDrawColor(renderer, 0, 255, 255, 255); // color
+    Ray& r = lastray;
+    SDL_RenderDrawLine(renderer, r.origin.x, r.origin.y, r.direction.x, r.direction.y);
+
+    // Draw green cross on end of ray
+    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255); // green
+    SDL_RenderDrawPoint(renderer, r.direction.x, r.direction.y);
+    SDL_RenderDrawPoint(renderer, r.direction.x-1, r.direction.y);
+    SDL_RenderDrawPoint(renderer, r.direction.x+1, r.direction.y);
+    SDL_RenderDrawPoint(renderer, r.direction.x, r.direction.y-1);
+    SDL_RenderDrawPoint(renderer, r.direction.x, r.direction.y+1);
     
   }
 
