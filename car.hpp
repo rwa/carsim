@@ -55,7 +55,6 @@ struct Car {
   bool right_wall_detected = false;
 
   //bool going_straight = true;
-  bool look_left = false;
   int next_turn = 0; // -1 next turn left, +1 next turn right, +2 u-turn
 
   // after a left turn, we still see an open wall on the left (where
@@ -148,12 +147,6 @@ struct Car {
     return dist;
   }
 
-  void forward_clear_corner()
-  {
-    (void) mode;
-    
-  }
-
   void turn_left(Maze& maze)
   {
     (void) maze;
@@ -229,7 +222,6 @@ struct Car {
 
       printf("setting look left flag\n");
       distsen.faceLeft();
-      look_left = true;
       
       // Diagnostic
       Point p(x,y);
@@ -332,16 +324,7 @@ struct Car {
     // very far away, we can set a lockout period where we just look
     // left for better resolution in left wall detection.
 
-    // Exception 3: coming out of a u-turn it's more robust to look
-    // left.
-    
     static bool sense_left = true;
-
-    // if (look_left) {
-    //   printf("forcing look left\n");
-    //   sense_left = true;
-    //   look_left = false;
-    // }
 
     // don't measure when turning or moving up
     if (mode != FOLLOW_LINE) return;
