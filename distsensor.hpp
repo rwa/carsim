@@ -18,6 +18,7 @@ struct DistSensor {
   double getWorldTheta();
 
   bool faceLeft();
+  bool faceRight();
   bool faceFront();
 
   // -1: left, 0: forward, -2: in transition
