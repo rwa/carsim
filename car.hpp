@@ -168,8 +168,7 @@ struct Car {
       end_left_turn.push_back(p);
     }
     
-    left_wall_detected = true;
-    //going_straight = false;
+    //left_wall_detected = true;
   }
 
   void turn_right(Maze& maze)
@@ -191,19 +190,6 @@ struct Car {
       
     }
     
-    // bool l,m,r;
-    // readlinesensors(maze, l, m, r);
-    // if (l && m && !r) {
-    //   printf("exit right turn - back to follow line\n");
-    //   mode = FOLLOW_LINE;
-
-    //   // Diagnostic
-    //   Point p(x,y);
-    //   end_right_turn.push_back(p);
-      
-    // }
-
-    //going_straight = false;
   }
 
 
@@ -220,8 +206,8 @@ struct Car {
     if (elapsed_turning > UTURN_TIME) {
       mode = FOLLOW_LINE;
 
-      printf("setting look left flag\n");
-      distsen.faceLeft();
+      // printf("setting look left flag\n");
+      // distsen.faceLeft();
       
       // Diagnostic
       Point p(x,y);
@@ -352,6 +338,7 @@ struct Car {
 	  left_wall_detected = true;
 	}
 
+	// switch to front measurment
 	sense_left = false;
       }
     }
@@ -366,7 +353,7 @@ struct Car {
       
       if (facing_front) {
 	double dist = readdistancesensor(maze);
-	printf("front dist: %f\n",dist);
+	//printf("front dist: %f\n",dist);
 
 	// If we're closing in on a front wall, keep measuring front
 	if (dist < CLOSE_DIST) close_to_front = true;
@@ -459,6 +446,7 @@ struct Car {
     // the front wall and may have missed left detections.  look both
     // ways.
     if (front_wall_detected) {
+      // stop motors here
       sense_left_and_right(maze);
     }
 
@@ -468,10 +456,11 @@ struct Car {
 	if (front_wall_detected) {
 	  front_wall_detected = false;
 
+	  mode = MOVING_UP;
+	  moving_up_start_ticks = SDL_GetTicks();
+	  
 	  if (right_wall_detected) {
 	    printf("START MOVING UP FOR UTURN\n");
-	    mode = MOVING_UP;
-	    moving_up_start_ticks = SDL_GetTicks();
 	    next_turn = +2;
 
 	    // Diagnostic
@@ -480,8 +469,6 @@ struct Car {
 	  }
 	  else {
 	    printf("START MOVING UP FOR RIGHT TURN\n");
-	    mode = MOVING_UP;
-	    moving_up_start_ticks = SDL_GetTicks();
 	    next_turn = +1;
 	    
 	    // Diagnostic
