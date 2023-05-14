@@ -49,6 +49,7 @@ struct Car {
 
   bool front_wall_detected = false;
   bool left_wall_detected = false;
+  bool right_wall_detected = false;
 
   bool going_straight = true;
   int next_turn = 0; // -1 next turn left, +1 next turn right, +2 u-turn
@@ -403,6 +404,33 @@ struct Car {
       
     return false;
   }
+
+  void sense_left_and_right(Maze& maze)
+  {
+    bool facing;
+
+    do {
+      facing = distsen.faceRight();
+    } while (!facing);
+
+    double dist = readdistancesensor(maze);
+    printf("right dist: %f\n",dist);
+
+    if (dist < RIGHT_DIST) {
+      right_wall_detected = true;
+    }
+
+    do {
+      facing = distsen.faceLeft();
+    } while (!facing);
+
+    dist = readdistancesensor(maze);
+    printf("left dist: %f\n",dist);
+
+    if (dist < LEFT_DIST) {
+      left_wall_detected = true;
+    }
+  }
   
   
   void control(Maze& maze, double elapsed_time)
@@ -411,6 +439,12 @@ struct Car {
 
     // update front_wall_detected and left_wall_detected
     sense_walls(maze);
+
+    // we were probably zooming on the front wall and may have missed
+    // left detections.  look both ways.
+    if (front_wall_detected) {
+      sense_left_and_right(maze);
+    }
 
     // Update left lockout flag
     uint32_t cur_ticks = SDL_GetTicks();
