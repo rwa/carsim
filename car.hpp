@@ -2,6 +2,7 @@
 #include <SDL.h>
 
 #include <string>
+#include <sstream>
 using namespace std;
 
 #include "linesensor.hpp"
@@ -16,20 +17,23 @@ using namespace std;
 #define MAKING_UTURN 4
 
 // Adjustable constants
-#define MOVE_UP_TIME_LEFT_TURN 1.7
-#define MOVE_UP_TIME_RIGHT_TURN 1.2
+#define MOVE_UP_TIME_LEFT_TURN 1.5
+#define MOVE_UP_TIME_RIGHT_TURN 1.0
 #define MOVE_UP_TIME_UTURN 1.2
-#define TURN_RIGHT_TIME 1.0
-#define TURN_LEFT_TIME 1.5
-#define UTURN_TIME 3.0
-#define LEFT_LOCK_TIME 2.5
+#define TURN_RIGHT_TIME 0.5
+#define TURN_LEFT_TIME 0.75
+#define UTURN_TIME 1.5
+#define LEFT_LOCK_TIME 2.2
+#define FRONT_LOCK_TIME 2.0
 
-#define FRONT_DIST 70
+#define TURN_SPEED M_PI/100;
+
+#define FRONT_DIST 50
 #define LEFT_DIST 75
 #define RIGHT_DIST 75
 
 struct Car {
-
+ 
   LineSensor lsen;
   LineSensor msen;
   LineSensor rsen;
@@ -51,8 +55,11 @@ struct Car {
 
   // after a left turn, lock out another one for a bit
   bool left_turn_lockout = false;
-  uint32_t lockout_start_ticks = 0;
-  
+  uint32_t left_lockout_start_ticks = 0;
+
+  // if we're far from a front wall, wait to measure again
+  bool front_lockout = false;
+  uint32_t front_lockout_start_ticks = 0;
   
   // moving up is based on a timer, start timer when initiating moving up
   uint32_t moving_up_start_ticks = 0;
@@ -100,7 +107,7 @@ struct Car {
   void forward()
   {
     double u = 1.0;
-    double dt = 0.2;
+    double dt = 0.3;
     
     x += u*sin(theta)*dt;
     y -= u*cos(theta)*dt;
@@ -147,35 +154,19 @@ struct Car {
     double elapsed_turning =  (cur_ticks -turning_start_ticks) / 1000.0;
     
     (void) mode;
-    double turn_speed = M_PI/200;
-    theta -= turn_speed;
+    theta -= TURN_SPEED;
 
     if (elapsed_turning > TURN_LEFT_TIME) {
       mode = FOLLOW_LINE;
 
       left_turn_lockout = true;
-      lockout_start_ticks = SDL_GetTicks();
+      left_lockout_start_ticks = SDL_GetTicks();
       
       // Diagnostic
       Point p(x,y);
       end_left_turn.push_back(p);
     }
     
-    // (void) mode;
-    // double turn_speed = M_PI/200;
-    // theta -= turn_speed;
-
-    // bool l,m,r;
-    // readlinesensors(maze, l, m, r);
-    // if (!l && m && r) {
-    //   printf("exit left turn - back to follow line\n");
-    //   mode = FOLLOW_LINE;
-
-    //   // Diagnostic
-    //   Point p(x,y);
-    //   end_left_turn.push_back(p);
-    // }
-
     left_wall_detected = true;
     going_straight = false;
   }
@@ -188,8 +179,7 @@ struct Car {
     double elapsed_turning =  (cur_ticks -turning_start_ticks) / 1000.0;
     
     (void) mode;
-    double turn_speed = M_PI/200;
-    theta += turn_speed;
+    theta += TURN_SPEED;
 
     if (elapsed_turning > TURN_RIGHT_TIME) {
       mode = FOLLOW_LINE;
@@ -224,8 +214,7 @@ struct Car {
     double elapsed_turning =  (cur_ticks -turning_start_ticks) / 1000.0;
     
     (void) mode;
-    double turn_speed = M_PI/200;
-    theta -= turn_speed;
+    theta -= TURN_SPEED;
 
     if (elapsed_turning > UTURN_TIME) {
       mode = FOLLOW_LINE;
@@ -331,6 +320,15 @@ struct Car {
 
     // don't measure when turning or moving up
     if (mode != FOLLOW_LINE) return;
+
+    // Update front lockout flag
+    uint32_t cur_ticks = SDL_GetTicks();
+    double elapsed_lockout =  (cur_ticks -front_lockout_start_ticks) / 1000.0;
+    if (elapsed_lockout > FRONT_LOCK_TIME) {
+      front_lockout = false;
+    }
+
+    if (front_lockout) sense_left = true;
     
     if (sense_left) {
 
@@ -354,18 +352,35 @@ struct Car {
     if (!sense_left) {
       
       bool facing_front = distsen.faceFront();
+
+      bool close_to_front = false;
+      bool far_from_front = false;
       
       if (facing_front) {
 	double dist = readdistancesensor(maze);
-	//printf("front dist: %f\n",dist);
-	
+	printf("front dist: %f\n",dist);
+
+	// If we're closing in on a front wall, keep measuring front
+	double close_tol = 100;
+	if (dist < close_tol) close_to_front = true;
+
+	// If we're far from a wall, we can measure side for awhile
+	double far_tol = 200;
+	if (dist > far_tol) far_from_front = true;
+
+	if (far_from_front) {
+	  front_lockout = true;
+	  front_lockout_start_ticks = SDL_GetTicks();
+	}
+
 	front_wall_detected = false;
 	if (dist < FRONT_DIST) {
 	  printf("FRONT WALL DETECT\n");
 	  front_wall_detected = true;
+	  close_to_front = false;
 	}
 	
-	sense_left = true;
+	if (!close_to_front) sense_left = true;
       }
     }
   }
@@ -399,7 +414,7 @@ struct Car {
 
     // Update left lockout flag
     uint32_t cur_ticks = SDL_GetTicks();
-    double elapsed_lockout =  (cur_ticks -lockout_start_ticks) / 1000.0;
+    double elapsed_lockout =  (cur_ticks -left_lockout_start_ticks) / 1000.0;
     if (elapsed_lockout > LEFT_LOCK_TIME) {
       left_turn_lockout = false;
     }
@@ -525,7 +540,7 @@ struct Car {
   }
 
 
-  void annotate(SDL_Renderer* renderer, TTF_Font* font) {
+  void annotate(SDL_Renderer* renderer, TTF_Font* font, double elapsed_time) {
 
     SDL_Color textColor = {255, 255, 255, 255};  // White color for text
 
@@ -534,6 +549,25 @@ struct Car {
     if (mode == MAKING_LEFT_TURN) mode1 = "left turn";
     if (mode == MAKING_RIGHT_TURN) mode1 = "right turn";
     if (mode == MOVING_UP) mode1 = "moving up";
+
+    {
+      std::ostringstream timestr;
+      timestr.precision(1);
+      timestr << std::fixed << elapsed_time;
+      std::string segText = "elapsed time: " +timestr.str();
+      
+      SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
+      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+      
+      int textWidth, textHeight;
+      SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
+      
+      SDL_Rect dst = { 650 - textWidth / 2, 50 - textHeight / 2, textWidth, textHeight};
+      SDL_RenderCopy(renderer, texture, NULL, &dst);
+
+      SDL_FreeSurface(surface);
+      SDL_DestroyTexture(texture);
+    }
 
     {
       std::string segText = "mode: " +mode1;
@@ -627,10 +661,25 @@ struct Car {
       SDL_DestroyTexture(texture);
     }
     
+    {
+      std::string segText = "front sense lockout: " +to_string(front_lockout);
+      
+      SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
+      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+      
+      int textWidth, textHeight;
+      SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
+      
+      SDL_Rect dst = { 650 - textWidth / 2, 400 - textHeight / 2, textWidth, textHeight};
+      SDL_RenderCopy(renderer, texture, NULL, &dst);
+      SDL_FreeSurface(surface);
+      SDL_DestroyTexture(texture);
+    }
+    
   }
   
 
-  void draw(SDL_Renderer* renderer, TTF_Font* font) {
+  void draw(SDL_Renderer* renderer, TTF_Font* font, double elapsed_time) {
 
     // Draw the texture at x,y as the center, rotated by theta degrees
     SDL_Rect destRect;
@@ -728,7 +777,7 @@ struct Car {
       SDL_RenderDrawLine(renderer, it.x-4, it.y-4, it.x+4, it.y+4);
     }
     
-    annotate(renderer, font);
+    annotate(renderer, font, elapsed_time);
   }
 
   ~Car() {

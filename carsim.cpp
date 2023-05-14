@@ -27,6 +27,8 @@ uint32_t startTime;
 Uint32 frameStart;
 int frameTime;
 
+double elapsed_time = 0;
+
 bool isPaused = false;
 
 Maze parseMaze()
@@ -155,7 +157,7 @@ int main()
 
     // Draw
     maze.draw(renderer, font);
-    car.draw(renderer, font);
+    car.draw(renderer, font, elapsed_time);
 
     // annotate(renderer, font);
     
@@ -210,7 +212,7 @@ int main()
     SDL_RenderPresent(renderer);
 
     uint32_t currTime = SDL_GetTicks();
-    double elapsed_time = (currTime - startTime) / 1000.0; // Convert to seconds.
+    elapsed_time = (currTime - startTime) / 1000.0; // Convert to seconds.
     
     // Control the car
     car.control(maze, elapsed_time);
