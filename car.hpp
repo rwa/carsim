@@ -17,20 +17,23 @@ using namespace std;
 #define MAKING_UTURN 4
 
 // Adjustable constants
-#define MOVE_UP_TIME_LEFT_TURN 1.5
-#define MOVE_UP_TIME_RIGHT_TURN 1.0
-#define MOVE_UP_TIME_UTURN 1.2
-#define TURN_RIGHT_TIME 0.5
+#define MOVE_UP_TIME_LEFT_TURN 0.55
+#define MOVE_UP_TIME_RIGHT_TURN 0.45
+#define MOVE_UP_TIME_UTURN 0.6
+#define TURN_RIGHT_TIME 0.6
 #define TURN_LEFT_TIME 0.75
 #define UTURN_TIME 1.5
-#define LEFT_LOCK_TIME 2.2
+#define LEFT_LOCK_TIME 1.5
 #define FRONT_LOCK_TIME 2.0
 
 #define TURN_SPEED M_PI/100;
 
-#define FRONT_DIST 50
+#define FRONT_DIST 55
 #define LEFT_DIST 75
 #define RIGHT_DIST 75
+
+#define CLOSE_DIST 150
+#define FAR_DIST 200
 
 struct Car {
  
@@ -51,7 +54,8 @@ struct Car {
   bool left_wall_detected = false;
   bool right_wall_detected = false;
 
-  bool going_straight = true;
+  //bool going_straight = true;
+  bool look_left = false;
   int next_turn = 0; // -1 next turn left, +1 next turn right, +2 u-turn
 
   // after a left turn, we still see an open wall on the left (where
@@ -111,7 +115,7 @@ struct Car {
   void forward()
   {
     double u = 1.0;
-    double dt = 0.3;
+    double dt = 0.4;
     
     x += u*sin(theta)*dt;
     y -= u*cos(theta)*dt;
@@ -172,7 +176,7 @@ struct Car {
     }
     
     left_wall_detected = true;
-    going_straight = false;
+    //going_straight = false;
   }
 
   void turn_right(Maze& maze)
@@ -206,7 +210,7 @@ struct Car {
       
     // }
 
-    going_straight = false;
+    //going_straight = false;
   }
 
 
@@ -223,12 +227,18 @@ struct Car {
     if (elapsed_turning > UTURN_TIME) {
       mode = FOLLOW_LINE;
 
+      printf("setting look left flag\n");
+      distsen.faceLeft();
+      look_left = true;
+      
       // Diagnostic
       Point p(x,y);
       end_uturn.push_back(p);
     }
-    
-    going_straight = false;
+
+    // start facing front
+    distsen.faceFront();
+    //going_straight = false;
   }
   
   void follow_line(Maze& maze)
@@ -241,7 +251,7 @@ struct Car {
     readlinesensors(maze, l, m, r);
     //printf("%d %d %d\n",l,m,r);
     
-    going_straight = false;
+    //going_straight = false;
     if (l && m && !r)  {
       //printf("110: steer left\n");
       theta -= steer_amount;
@@ -261,7 +271,7 @@ struct Car {
     if (!l && m && !r) {
       //printf("010: forward\n");
       forward();
-      going_straight = true;
+      //going_straight = true;
     }
     if (l && m && r) {
       //printf("111: forward?\n");
@@ -314,13 +324,34 @@ struct Car {
     }
     
     forward();
+    forward();
 
     (void) maze;
   }
 
   void sense_walls(Maze& maze)
   {
+    // by default we alternate sensing left and forward.  however,
+    // there are exceptions to this.
+
+    // Exception 1: we enter a sort of creep mode when we get close
+    // enough to a wall in front of us. this is so we can accurately
+    // approach the wall to make our turn.
+
+    // Exception 2: if a measurement to the front shows the wall is
+    // very far away, we can set a lockout period where we just look
+    // left for better resolution in left wall detection.
+
+    // Exception 3: coming out of a u-turn it's more robust to look
+    // left.
+    
     static bool sense_left = true;
+
+    // if (look_left) {
+    //   printf("forcing look left\n");
+    //   sense_left = true;
+    //   look_left = false;
+    // }
 
     // don't measure when turning or moving up
     if (mode != FOLLOW_LINE) return;
@@ -365,12 +396,10 @@ struct Car {
 	printf("front dist: %f\n",dist);
 
 	// If we're closing in on a front wall, keep measuring front
-	double close_tol = 100;
-	if (dist < close_tol) close_to_front = true;
+	if (dist < CLOSE_DIST) close_to_front = true;
 
 	// If we're far from a wall, we can measure side for awhile
-	double far_tol = 200;
-	if (dist > far_tol) far_from_front = true;
+	if (dist > FAR_DIST) far_from_front = true;
 
 	if (far_from_front) {
 	  front_lockout = true;
@@ -383,7 +412,8 @@ struct Car {
 	  front_wall_detected = true;
 	  close_to_front = false;
 	}
-	
+
+	// If we're close to front wall, don't turn left until we detect it.
 	if (!close_to_front) sense_left = true;
       }
     }
@@ -419,6 +449,7 @@ struct Car {
     double dist = readdistancesensor(maze);
     printf("right dist: %f\n",dist);
 
+    right_wall_detected = false;
     if (dist < RIGHT_DIST) {
       right_wall_detected = true;
     }
@@ -430,6 +461,7 @@ struct Car {
     dist = readdistancesensor(maze);
     printf("left dist: %f\n",dist);
 
+    left_wall_detected = false;
     if (dist < LEFT_DIST) {
       left_wall_detected = true;
     }
@@ -463,7 +495,7 @@ struct Car {
 	if (front_wall_detected) {
 	  front_wall_detected = false;
 
-	  bool right_wall_detected = sense_right_wall(maze);
+	  //	  bool right_wall_detected = sense_right_wall(maze);
 	  if (right_wall_detected) {
 	    printf("START MOVING UP FOR UTURN\n");
 	    mode = MOVING_UP;
@@ -670,20 +702,20 @@ struct Car {
       SDL_FreeSurface(surface);
       SDL_DestroyTexture(texture);
     }
-    {
-      std::string segText = "going straight: " +to_string(going_straight);
+    // {
+    //   std::string segText = "going straight: " +to_string(going_straight);
       
-      SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
-      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+    //   SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
+    //   SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
       
-      int textWidth, textHeight;
-      SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
+    //   int textWidth, textHeight;
+    //   SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
       
-      SDL_Rect dst = { 650 - textWidth / 2, 300 - textHeight / 2, textWidth, textHeight};
-      SDL_RenderCopy(renderer, texture, NULL, &dst);
-      SDL_FreeSurface(surface);
-      SDL_DestroyTexture(texture);
-    }
+    //   SDL_Rect dst = { 650 - textWidth / 2, 300 - textHeight / 2, textWidth, textHeight};
+    //   SDL_RenderCopy(renderer, texture, NULL, &dst);
+    //   SDL_FreeSurface(surface);
+    //   SDL_DestroyTexture(texture);
+    // }
     {
       std::string segText = "left lockout: " +to_string(left_turn_lockout);
       

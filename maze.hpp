@@ -93,19 +93,19 @@ struct Segment {
       SDL_Rect rect = {x0-hw, y0, hw*2, y1-y0};
       SDL_SetRenderDrawColor(renderer, 255, 0, 0, 100); // Set color to red
       SDL_RenderFillRect(renderer, &rect);
-      if (selected) {
-	SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE); // Set color to white
-	SDL_RenderDrawRect(renderer, &rect);
-      }
+      // if (selected) {
+      // 	SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE); // Set color to white
+      // 	SDL_RenderDrawRect(renderer, &rect);
+      // }
     }
     if (horizontal) {
       SDL_Rect rect = {x0, y0-hw, x1-x0, hw*2};
       SDL_SetRenderDrawColor(renderer, 255, 0, 0, 100); // Set color to red
       SDL_RenderFillRect(renderer, &rect);
-      if (selected) {
-	SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE); // Set color to white
-	SDL_RenderDrawRect(renderer, &rect);
-      }
+      // if (selected) {
+      // 	SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE); // Set color to white
+      // 	SDL_RenderDrawRect(renderer, &rect);
+      // }
     }
 
     (void) font;
@@ -235,6 +235,13 @@ public:
 	}
       }
     }
+    
+  }
+
+  void addPath(double x0, double y0, double x1, double y1) {
+
+    Segment s(x0,y0,x1,y1);
+    pathsegs.push_back(s);
     
   }
 
