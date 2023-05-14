@@ -54,7 +54,10 @@ struct Car {
   bool going_straight = true;
   int next_turn = 0; // -1 next turn left, +1 next turn right, +2 u-turn
 
-  // after a left turn, lock out another one for a bit
+  // after a left turn, we still see an open wall on the left (where
+  // we came from). because we want to turn left whenever we sense a
+  // left missing wall, lock out a left turn for a short time after
+  // making one.
   bool left_turn_lockout = false;
   uint32_t left_lockout_start_ticks = 0;
 
@@ -437,22 +440,23 @@ struct Car {
   {
     (void) elapsed_time;
 
-    // update front_wall_detected and left_wall_detected
-    sense_walls(maze);
-
-    // we were probably zooming on the front wall and may have missed
-    // left detections.  look both ways.
-    if (front_wall_detected) {
-      sense_left_and_right(maze);
-    }
-
-    // Update left lockout flag
+    // Update left turn lockout flag
     uint32_t cur_ticks = SDL_GetTicks();
     double elapsed_lockout =  (cur_ticks -left_lockout_start_ticks) / 1000.0;
     if (elapsed_lockout > LEFT_LOCK_TIME) {
       left_turn_lockout = false;
     }
 	
+    // update front_wall_detected and left_wall_detected
+    sense_walls(maze);
+
+    // if we detected a front wall, we were probably in creep mode on
+    // the front wall and may have missed left detections.  look both
+    // ways.
+    if (front_wall_detected) {
+      sense_left_and_right(maze);
+    }
+
     // update mode based on wall sensing
     if (mode == FOLLOW_LINE) {
       if (left_wall_detected) {
