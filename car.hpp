@@ -249,36 +249,26 @@ struct Car {
     
     bool l,m,r;
     readlinesensors(maze, l, m, r);
-    //printf("%d %d %d\n",l,m,r);
-    
-    //going_straight = false;
+
     if (l && m && !r)  {
-      //printf("110: steer left\n");
       theta -= steer_amount;
     }
     if (l && !m && !r) {
-      //printf("100: steer left\n");
       theta -= steer_amount;
     }
     if (!l && m && r)  {
-      //printf("011: steer right\n");
       theta += steer_amount;
     }
     if (!l && !m && r) {
-      //printf("001: steer right\n");
       theta += steer_amount;
     }
     if (!l && m && !r) {
-      //printf("010: forward\n");
       forward();
-      //going_straight = true;
     }
     if (l && m && r) {
-      //printf("111: forward?\n");
       forward();
     }
     if (!l && !m && !r) {
-      //printf("000: forward?\n");
       forward();
     }
     forward();
@@ -495,7 +485,6 @@ struct Car {
 	if (front_wall_detected) {
 	  front_wall_detected = false;
 
-	  //	  bool right_wall_detected = sense_right_wall(maze);
 	  if (right_wall_detected) {
 	    printf("START MOVING UP FOR UTURN\n");
 	    mode = MOVING_UP;
