@@ -11,29 +11,24 @@ using namespace std;
 
 // Drive modes
 #define FOLLOW_LINE 0
-#define MAKING_LEFT_TURN 1
-#define MAKING_RIGHT_TURN 2
-#define MOVING_UP 3
-#define MAKING_UTURN 4
+#define LEFT_TURN 1
+#define RIGHT_TURN 2
+#define MOVE_UP_FOR_LEFT 3
+#define LOOK 5
+#define CREEP_TO_WALL_THEN_RIGHT 6
+#define CREEP_TO_WALL_THEN_LEFT 7
+#define CREEP_BACK_THEN_LEFT 8
+#define BACK_UP 9
 
-// Adjustable constants
-#define MOVE_UP_TIME_LEFT_TURN 0.55
-#define MOVE_UP_TIME_RIGHT_TURN 0.45
-#define MOVE_UP_TIME_UTURN 0.6
-#define TURN_RIGHT_TIME 0.6
-#define TURN_LEFT_TIME 0.75
-#define UTURN_TIME 1.5
-#define LEFT_LOCK_TIME 1.5
-#define FRONT_LOCK_TIME 2.0
+#define WALL_DIST 70
+#define FRONT_STOP_DIST 20
+
+#define FORWARD_TIME 1.5
+#define BACK_UP_TIME 3.0
+#define MOVE_UP_FOR_LEFT_TIME 3.5
+#define TURN_TIME 0.65
 
 #define TURN_SPEED M_PI/100;
-
-#define FRONT_DIST 55
-#define LEFT_DIST 75
-#define RIGHT_DIST 75
-
-#define CLOSE_DIST 150
-#define FAR_DIST 200
 
 struct Car {
  
@@ -45,14 +40,29 @@ struct Car {
 
   Ray lastray;
 
-  double w = 40;
-  double l = 45;
+  double w = 65;
+  double l = 70;
+
+  double x,y;
+
+  double r = static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
+
+  double theta_rand = 0.1*r*M_PI;
+  // double theta = 3*M_PI/2 +theta_rand;
+  double theta = 0 +theta_rand;
+
+  SDL_Texture* texture;
 
   int mode;
+
+  bool in_reverse = false;
+
+  //bool last_turn_was_left = false;
 
   bool front_wall_detected = false;
   bool left_wall_detected = false;
   bool right_wall_detected = false;
+  bool second_pass = false;
 
   //bool going_straight = true;
   int next_turn = 0; // -1 next turn left, +1 next turn right, +2 u-turn
@@ -68,11 +78,16 @@ struct Car {
   bool front_lockout = false;
   uint32_t front_lockout_start_ticks = 0;
   
-  // moving up is based on a timer, start timer when initiating moving up
-  uint32_t moving_up_start_ticks = 0;
+  uint32_t move_up_start_ticks = 0;
 
   uint32_t turning_start_ticks = 0;
+
+  uint32_t forward_start_ticks = 0;
+  uint32_t backup_start_ticks = 0;
   
+  // backup to take another pass at finding left wall
+  uint32_t find_left_backup_start_ticks = 0;
+
   // Diagnostics
   vector<Point> move_up_for_left_turn;
   vector<Point> start_left_turn;
@@ -85,9 +100,14 @@ struct Car {
   vector<Point> move_up_for_uturn;
   vector<Point> start_uturn;
   vector<Point> end_uturn;
+
+  vector<Point> left_wall_backup_start;
+  vector<Point> left_wall_backup_end;
   
   Car(SDL_Renderer* renderer) {
 
+    // x = 4.5*CELL_SIZE;
+    // y = 2.5*CELL_SIZE;
     x = 0.5*CELL_SIZE;
     y = 4.5*CELL_SIZE;
 
@@ -109,6 +129,15 @@ struct Car {
     mode = FOLLOW_LINE;
     
     createTexture(renderer);
+  }
+
+  void backward()
+  {
+    double u = -1.0;
+    double dt = 0.4;
+    
+    x += u*sin(theta)*dt;
+    y -= u*cos(theta)*dt;
   }
 
   void forward()
@@ -147,30 +176,54 @@ struct Car {
     return dist;
   }
 
-  void turn_left(Maze& maze)
+  void creep_forward_to_front_wall(Maze& maze, int turn_mode)
+  {
+    forward();
+    double dist = readdistancesensor(maze);
+
+    if (dist < FRONT_STOP_DIST) {
+      mode = turn_mode;
+      turning_start_ticks = SDL_GetTicks();
+    }
+    
+  }
+
+  void creep_back_to_left_wall(Maze& maze)
+  {
+    backward();
+    double dist = readdistancesensor(maze);
+
+    if (dist < WALL_DIST) {
+      printf("mode to MOVE UP FOR LEFT\n");
+      mode = MOVE_UP_FOR_LEFT;
+      move_up_start_ticks = SDL_GetTicks();
+    }
+    
+  }
+
+  void move_up_for_left(Maze& maze)
   {
     (void) maze;
     
     uint32_t cur_ticks = SDL_GetTicks();
-    double elapsed_turning =  (cur_ticks -turning_start_ticks) / 1000.0;
+    double elapsed_turning =  (cur_ticks -move_up_start_ticks) / 1000.0;
     
     (void) mode;
-    theta -= TURN_SPEED;
+    forward();
 
-    if (elapsed_turning > TURN_LEFT_TIME) {
-      mode = FOLLOW_LINE;
+    if (elapsed_turning > MOVE_UP_FOR_LEFT_TIME) {
+      printf("mode to LEFT TURN\n");
+      mode = LEFT_TURN;
+      turning_start_ticks = SDL_GetTicks();      
 
-      left_turn_lockout = true;
-      left_lockout_start_ticks = SDL_GetTicks();
+      // // Diagnostic
+      // Point p(x,y);
+      // end_right_turn.push_back(p);
       
-      // Diagnostic
-      Point p(x,y);
-      end_left_turn.push_back(p);
     }
     
-    //left_wall_detected = true;
   }
-
+  
   void turn_right(Maze& maze)
   {
     (void) maze;
@@ -181,19 +234,16 @@ struct Car {
     (void) mode;
     theta += TURN_SPEED;
 
-    if (elapsed_turning > TURN_RIGHT_TIME) {
+    if (elapsed_turning > TURN_TIME) {
+      printf("mode to FOLLOW_LINE\n");
       mode = FOLLOW_LINE;
+      forward_start_ticks = SDL_GetTicks();      
 
-      // Diagnostic
-      Point p(x,y);
-      end_right_turn.push_back(p);
-      
     }
-    
+
   }
 
-
-  void make_uturn(Maze& maze)
+  void turn_left(Maze& maze)
   {
     (void) maze;
     
@@ -203,25 +253,39 @@ struct Car {
     (void) mode;
     theta -= TURN_SPEED;
 
-    if (elapsed_turning > UTURN_TIME) {
+    if (elapsed_turning > TURN_TIME) {
+      printf("mode to FOLLOW_LINE\n");
       mode = FOLLOW_LINE;
-
-      // printf("setting look left flag\n");
-      // distsen.faceLeft();
-      
-      // Diagnostic
-      Point p(x,y);
-      end_uturn.push_back(p);
+      forward_start_ticks = SDL_GetTicks();      
     }
 
-    // start facing front
-    distsen.faceFront();
-    //going_straight = false;
   }
+  
+
+  void back_up(Maze& maze)
+  {
+    (void) maze;
+    
+    uint32_t cur_ticks = SDL_GetTicks();
+    double elapsed_turning =  (cur_ticks -backup_start_ticks) / 1000.0;
+    
+    (void) mode;
+    backward();
+
+    if (elapsed_turning > BACK_UP_TIME) {
+      in_reverse = true;
+      mode = LOOK;
+      forward_start_ticks = SDL_GetTicks();      
+    }
+    
+  }
+  
+  
   
   void follow_line(Maze& maze)
   {
     (void) mode;
+    //printf("following line\n");
     
     double steer_amount = 0.005*M_PI;
     
@@ -250,284 +314,168 @@ struct Car {
       forward();
     }
     forward();
-  }
 
-  void move_up(Maze& maze)
-  {
     uint32_t cur_ticks = SDL_GetTicks();
-    double elapsed_moving_up =  (cur_ticks - moving_up_start_ticks) / 1000.0; // Convert to secs
-
-    if (next_turn == -1 && elapsed_moving_up > MOVE_UP_TIME_LEFT_TURN) {
-      mode = MAKING_LEFT_TURN;
-
-      turning_start_ticks = SDL_GetTicks();
-
-      // Diagnostic
-      Point p(x,y);
-      start_left_turn.push_back(p);
-      
-      return;
+    double elapsed =  (cur_ticks -forward_start_ticks) / 1000.0;
+    if (elapsed > FORWARD_TIME) {
+      printf("END following line\n");
+      mode = LOOK;
     }
-    if (next_turn == +1 && elapsed_moving_up > MOVE_UP_TIME_RIGHT_TURN) {
-      mode = MAKING_RIGHT_TURN;
-
-      turning_start_ticks = SDL_GetTicks();
-      
-      // Diagnostic
-      Point p(x,y);
-      start_right_turn.push_back(p);
-      
-      return;
-    }
-    if (next_turn == +2 && elapsed_moving_up > MOVE_UP_TIME_UTURN) {
-      mode = MAKING_UTURN;
-
-      turning_start_ticks = SDL_GetTicks();
-      
-      // Diagnostic
-      Point p(x,y);
-      start_uturn.push_back(p);
-      
-      return;
-    }
-    
-    forward();
-    forward();
-
-    (void) maze;
   }
 
   void sense_walls(Maze& maze)
   {
-    // by default we alternate sensing left and forward.  however,
-    // there are exceptions to this.
 
-    // Exception 1: we enter a sort of creep mode when we get close
-    // enough to a wall in front of us. this is so we can accurately
-    // approach the wall to make our turn.
+    bool facing_left;
+    do {
+      facing_left = distsen.faceLeft();
+    } while (!facing_left);
 
-    // Exception 2: if a measurement to the front shows the wall is
-    // very far away, we can set a lockout period where we just look
-    // left for better resolution in left wall detection.
-
-    static bool sense_left = true;
-
-    // don't measure when turning or moving up
-    if (mode != FOLLOW_LINE) return;
-
-    // Update front lockout flag
-    uint32_t cur_ticks = SDL_GetTicks();
-    double elapsed_lockout =  (cur_ticks -front_lockout_start_ticks) / 1000.0;
-    if (elapsed_lockout > FRONT_LOCK_TIME) {
-      front_lockout = false;
-    }
-
-    if (front_lockout) sense_left = true;
-    
-    if (sense_left) {
-
-      bool facing_left = distsen.faceLeft();
-
-      if (facing_left) {
-
-	double dist = readdistancesensor(maze);
-	//printf("left dist: %f\n",dist);
+    double dist = readdistancesensor(maze);
+    printf("left dist: %f\n",dist);
 	
-	left_wall_detected = false;
-	if (dist < LEFT_DIST) {
-	  left_wall_detected = true;
-	}
-
-	// switch to front measurment
-	sense_left = false;
-      }
+    left_wall_detected = false;
+    if (dist < WALL_DIST) {
+      left_wall_detected = true;
     }
 
-    // sense front
-    if (!sense_left) {
-      
-      bool facing_front = distsen.faceFront();
+    bool facing_front;
+    do {
+      facing_front = distsen.faceFront();
+    } while (!facing_front);
 
-      bool close_to_front = false;
-      bool far_from_front = false;
-      
-      if (facing_front) {
-	double dist = readdistancesensor(maze);
-	//printf("front dist: %f\n",dist);
+    dist = readdistancesensor(maze);
+    printf("front dist: %f\n",dist);
 
-	// If we're closing in on a front wall, keep measuring front
-	if (dist < CLOSE_DIST) close_to_front = true;
-
-	// If we're far from a wall, we can measure side for awhile
-	if (dist > FAR_DIST) far_from_front = true;
-
-	if (far_from_front) {
-	  front_lockout = true;
-	  front_lockout_start_ticks = SDL_GetTicks();
-	}
-
-	front_wall_detected = false;
-	if (dist < FRONT_DIST) {
-	  printf("FRONT WALL DETECT\n");
-	  front_wall_detected = true;
-	  close_to_front = false;
-	}
-
-	// If we're close to front wall, don't turn left until we detect it.
-	if (!close_to_front) sense_left = true;
-      }
+    front_wall_detected = false;
+    if (dist < WALL_DIST) {
+      front_wall_detected = true;
     }
-  }
 
-  bool sense_right_wall(Maze& maze)
-  {
     bool facing_right;
-
     do {
       facing_right = distsen.faceRight();
     } while (!facing_right);
 
-    double dist = readdistancesensor(maze);
-    printf("right dist: %f\n",dist);
-
-    if (dist < RIGHT_DIST) {
-      printf("RIGHT WALL DETECT\n");
-      return true;
-    }
-      
-    return false;
-  }
-
-  void sense_left_and_right(Maze& maze)
-  {
-    bool facing;
-
-    do {
-      facing = distsen.faceRight();
-    } while (!facing);
-
-    double dist = readdistancesensor(maze);
+    dist = readdistancesensor(maze);
     printf("right dist: %f\n",dist);
 
     right_wall_detected = false;
-    if (dist < RIGHT_DIST) {
+    if (dist < WALL_DIST) {
       right_wall_detected = true;
     }
-
-    do {
-      facing = distsen.faceLeft();
-    } while (!facing);
-
-    dist = readdistancesensor(maze);
-    printf("left dist: %f\n",dist);
-
-    left_wall_detected = false;
-    if (dist < LEFT_DIST) {
-      left_wall_detected = true;
-    }
+    
   }
-  
   
   void control(Maze& maze, double elapsed_time)
   {
     (void) elapsed_time;
 
-    // Update left turn lockout flag
-    uint32_t cur_ticks = SDL_GetTicks();
-    double elapsed_lockout =  (cur_ticks -left_lockout_start_ticks) / 1000.0;
-    if (elapsed_lockout > LEFT_LOCK_TIME) {
-      left_turn_lockout = false;
-    }
-	
-    // update front_wall_detected and left_wall_detected
-    sense_walls(maze);
+    
+    switch (mode) {
+    case LOOK:
+      printf("LOOK mode\n");
+      sense_walls(maze);
 
-    // if we detected a front wall, we were probably in creep mode on
-    // the front wall and may have missed left detections.  look both
-    // ways.
-    if (front_wall_detected) {
-      // stop motors here
-      sense_left_and_right(maze);
-    }
+      printf("left wall? %d\n",left_wall_detected);
+      printf("front wall? %d\n",front_wall_detected);
+      printf("right wall? %d\n",right_wall_detected);
 
-    // update mode based on wall sensing
-    if (mode == FOLLOW_LINE) {
-      if (left_wall_detected) {
-	if (front_wall_detected) {
-	  front_wall_detected = false;
-
-	  mode = MOVING_UP;
-	  moving_up_start_ticks = SDL_GetTicks();
-	  
-	  if (right_wall_detected) {
-	    printf("START MOVING UP FOR UTURN\n");
-	    next_turn = +2;
-
-	    // Diagnostic
-	    Point p(x,y);
-	    move_up_for_uturn.push_back(p);
-	  }
-	  else {
-	    printf("START MOVING UP FOR RIGHT TURN\n");
-	    next_turn = +1;
-	    
-	    // Diagnostic
-	    Point p(x,y);
-	    move_up_for_right_turn.push_back(p);
-	  } // no right wall
+      // When backing up, keep backing up until we see a passage which
+      // is the opposite of our last turn.
+      if (in_reverse) {
+	if (!right_wall_detected) {
+	  printf("last turn was left - found right turn out\n");
+	  mode = RIGHT_TURN;
+	  turning_start_ticks = SDL_GetTicks();
+	  in_reverse = false;
+	}
+	else if (!left_wall_detected) {
+	  printf("last turn was right - found left turn out\n");
+	  mode = LEFT_TURN;
+	  turning_start_ticks = SDL_GetTicks();
+	  in_reverse = false;
+	}
+	else {
+	  printf("mode to BACK_UP...\n");
+	  mode = BACK_UP;
+	  backup_start_ticks = SDL_GetTicks();
 	}
       }
       else {
 
-	bool l,m,r;
-	readlinesensors(maze, l, m, r);
-	if (l && m && !left_turn_lockout) {
-	  printf("START MOVING UP FOR LEFT TURN\n");
-	  mode = MOVING_UP;
-	  moving_up_start_ticks = SDL_GetTicks();
-	  next_turn = -1;
-	  front_wall_detected = false;
-	  
-	  // Diagnostic
-	  Point p(x,y);
-	  move_up_for_left_turn.push_back(p);
+	// front open but not left open - move forward
+	if (left_wall_detected && !front_wall_detected) {
+	  printf("mode to FOLLOW_LINE\n");
+	  mode = FOLLOW_LINE;
+	  forward_start_ticks = SDL_GetTicks();      
 	}
-      }
-    }
-    
-    switch (mode) {
-      
+	// L-right: look forward, creep to wall, turn right
+	else if (left_wall_detected && front_wall_detected && !right_wall_detected) {
+
+	  // look front
+	  bool facing_front;
+	  do { facing_front = distsen.faceFront(); } while (!facing_front);
+
+	  printf("mode to CREEP TO WALL THEN RIGHT...\n");
+	  mode = CREEP_TO_WALL_THEN_RIGHT;
+	}
+	// L-left: look forward, creep to wall, turn left
+	else if (front_wall_detected && right_wall_detected && !left_wall_detected) {
+
+	  bool facing_front;
+	  do { facing_front = distsen.faceFront(); } while (!facing_front);
+	
+	  printf("mode to CREEP TO WALL THEN LEFT...\n");
+	  mode = CREEP_TO_WALL_THEN_LEFT;
+	}
+	// L&F open: face left, creep back, then forward and left
+	else if (!front_wall_detected && !left_wall_detected) {
+
+	  bool facing_left;
+	  do { facing_left = distsen.faceLeft(); } while (!facing_left);
+	
+	  mode = CREEP_BACK_THEN_LEFT;
+	}
+	// all closed: back up
+	else if (front_wall_detected && right_wall_detected && left_wall_detected) {
+	  printf("mode to BACK_UP...\n");
+	  mode = BACK_UP;
+	  backup_start_ticks = SDL_GetTicks();      
+	}
+	else {
+	  printf("UNHANDLED CASE\n");
+	}
+
+      } // moving forward
+
+    break;
     case FOLLOW_LINE:
-      //printf("mode is follow line %d\n",mode);
       follow_line(maze);
       break;
-    case MAKING_LEFT_TURN:
-      //printf("mode is making left turn %d\n",mode);
+    case LEFT_TURN:
       turn_left(maze);
       break;
-    case MAKING_RIGHT_TURN:
-      //printf("mode is making right turn %d\n",mode);
+    case RIGHT_TURN:
       turn_right(maze);
       break;
-    case MOVING_UP:
-      // printf("mode is moving up %d\n",mode);
-      move_up(maze);
+    case CREEP_TO_WALL_THEN_RIGHT:
+      creep_forward_to_front_wall(maze, RIGHT_TURN);
       break;
-    case MAKING_UTURN:
-      //printf("mode is making right turn %d\n",mode);
-      make_uturn(maze);
+    case CREEP_TO_WALL_THEN_LEFT:
+      creep_forward_to_front_wall(maze, LEFT_TURN);
+      break;
+    case CREEP_BACK_THEN_LEFT:
+      creep_back_to_left_wall(maze);
+      break;
+    case MOVE_UP_FOR_LEFT:
+      move_up_for_left(maze);
+      break;
+    case BACK_UP:
+      back_up(maze);
       break;
     }
   }
-
-  double x,y;
-
-  double r = static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
-
-  double theta_rand = 0.1*r*M_PI;
-  double theta = 0 +theta_rand;
-
-  SDL_Texture* texture;
 
   void createTexture(SDL_Renderer* renderer) {
 
@@ -575,9 +523,9 @@ struct Car {
 
     string mode1;
     if (mode == FOLLOW_LINE) mode1 = "follow line";
-    if (mode == MAKING_LEFT_TURN) mode1 = "left turn";
-    if (mode == MAKING_RIGHT_TURN) mode1 = "right turn";
-    if (mode == MOVING_UP) mode1 = "moving up";
+    if (mode == LEFT_TURN) mode1 = "left turn";
+    if (mode == RIGHT_TURN) mode1 = "right turn";
+    if (mode == MOVE_UP_FOR_LEFT) mode1 = "moving up for left";
 
     {
       std::ostringstream timestr;
@@ -661,20 +609,20 @@ struct Car {
       SDL_FreeSurface(surface);
       SDL_DestroyTexture(texture);
     }
-    // {
-    //   std::string segText = "going straight: " +to_string(going_straight);
+    {
+      std::string segText = "second pass: " +to_string(second_pass);
       
-    //   SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
-    //   SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+      SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
+      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
       
-    //   int textWidth, textHeight;
-    //   SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
+      int textWidth, textHeight;
+      SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
       
-    //   SDL_Rect dst = { 650 - textWidth / 2, 300 - textHeight / 2, textWidth, textHeight};
-    //   SDL_RenderCopy(renderer, texture, NULL, &dst);
-    //   SDL_FreeSurface(surface);
-    //   SDL_DestroyTexture(texture);
-    // }
+      SDL_Rect dst = { 650 - textWidth / 2, 300 - textHeight / 2, textWidth, textHeight};
+      SDL_RenderCopy(renderer, texture, NULL, &dst);
+      SDL_FreeSurface(surface);
+      SDL_DestroyTexture(texture);
+    }
     {
       std::string segText = "left lockout: " +to_string(left_turn_lockout);
       
@@ -804,6 +752,19 @@ struct Car {
       SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
       SDL_RenderDrawLine(renderer, it.x-4, it.y+4, it.x+4, it.y-4);
       SDL_RenderDrawLine(renderer, it.x-4, it.y-4, it.x+4, it.y+4);
+    }
+
+    for (auto& it: left_wall_backup_start) {
+      // yellow cross
+      SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+      SDL_RenderDrawLine(renderer, it.x-4, it.y+4, it.x+4, it.y-4);
+      SDL_RenderDrawLine(renderer, it.x-4, it.y-4, it.x+4, it.y+4);
+    }
+    for (auto& it: left_wall_backup_end) {
+      // yellow plus
+      SDL_SetRenderDrawColor(renderer, 255, 255, 250, 255); 
+      SDL_RenderDrawLine(renderer, it.x-4, it.y, it.x+4, it.y);
+      SDL_RenderDrawLine(renderer, it.x, it.y-4, it.x, it.y+4);
     }
     
     annotate(renderer, font, elapsed_time);
