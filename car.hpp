@@ -14,19 +14,20 @@ using namespace std;
 #define LEFT_TURN 1
 #define RIGHT_TURN 2
 #define MOVE_UP_FOR_LEFT 3
-#define LOOK 5
-#define CREEP_TO_WALL_THEN_RIGHT 6
-#define CREEP_TO_WALL_THEN_LEFT 7
-#define CREEP_BACK_THEN_LEFT 8
-#define BACK_UP 9
+#define LOOK 4
+#define CREEP_TO_WALL_THEN_RIGHT 5
+#define CREEP_TO_WALL_THEN_LEFT 6
+#define CREEP_BACK_THEN_LEFT 7
+#define BACK_UP 8
 
-#define WALL_DIST 70
+// Adjustable parameters
 #define FRONT_STOP_DIST 20
+#define WALL_DIST 70
 
-#define FORWARD_TIME 1.5
-#define BACK_UP_TIME 3.0
+#define FORWARD_TIME 3.0
+#define BACK_UP_TIME 3.0 // should 
 #define MOVE_UP_FOR_LEFT_TIME 3.5
-#define TURN_TIME 0.65
+#define TURN_TIME 0.7
 
 #define TURN_SPEED M_PI/100;
 
@@ -57,37 +58,16 @@ struct Car {
 
   bool in_reverse = false;
 
-  //bool last_turn_was_left = false;
-
   bool front_wall_detected = false;
   bool left_wall_detected = false;
   bool right_wall_detected = false;
-  bool second_pass = false;
 
-  //bool going_straight = true;
-  int next_turn = 0; // -1 next turn left, +1 next turn right, +2 u-turn
-
-  // after a left turn, we still see an open wall on the left (where
-  // we came from). because we want to turn left whenever we sense a
-  // left missing wall, lock out a left turn for a short time after
-  // making one.
-  bool left_turn_lockout = false;
-  uint32_t left_lockout_start_ticks = 0;
-
-  // if we're far from a front wall, wait to measure again
-  bool front_lockout = false;
-  uint32_t front_lockout_start_ticks = 0;
-  
+  // timers for marking the start of timed moves
   uint32_t move_up_start_ticks = 0;
-
   uint32_t turning_start_ticks = 0;
-
   uint32_t forward_start_ticks = 0;
   uint32_t backup_start_ticks = 0;
   
-  // backup to take another pass at finding left wall
-  uint32_t find_left_backup_start_ticks = 0;
-
   // Diagnostics
   vector<Point> move_up_for_left_turn;
   vector<Point> start_left_turn;
@@ -182,6 +162,7 @@ struct Car {
     double dist = readdistancesensor(maze);
 
     if (dist < FRONT_STOP_DIST) {
+      printf("mode to TURN %d\n",turn_mode);
       mode = turn_mode;
       turning_start_ticks = SDL_GetTicks();
     }
@@ -215,16 +196,11 @@ struct Car {
       printf("mode to LEFT TURN\n");
       mode = LEFT_TURN;
       turning_start_ticks = SDL_GetTicks();      
-
-      // // Diagnostic
-      // Point p(x,y);
-      // end_right_turn.push_back(p);
-      
     }
     
   }
   
-  void turn_right(Maze& maze)
+  void turn(Maze& maze, int dir)
   {
     (void) maze;
     
@@ -232,7 +208,7 @@ struct Car {
     double elapsed_turning =  (cur_ticks -turning_start_ticks) / 1000.0;
     
     (void) mode;
-    theta += TURN_SPEED;
+    theta += dir*TURN_SPEED;
 
     if (elapsed_turning > TURN_TIME) {
       printf("mode to FOLLOW_LINE\n");
@@ -242,25 +218,6 @@ struct Car {
     }
 
   }
-
-  void turn_left(Maze& maze)
-  {
-    (void) maze;
-    
-    uint32_t cur_ticks = SDL_GetTicks();
-    double elapsed_turning =  (cur_ticks -turning_start_ticks) / 1000.0;
-    
-    (void) mode;
-    theta -= TURN_SPEED;
-
-    if (elapsed_turning > TURN_TIME) {
-      printf("mode to FOLLOW_LINE\n");
-      mode = FOLLOW_LINE;
-      forward_start_ticks = SDL_GetTicks();      
-    }
-
-  }
-  
 
   void back_up(Maze& maze)
   {
@@ -313,7 +270,6 @@ struct Car {
     if (!l && !m && !r) {
       forward();
     }
-    forward();
 
     uint32_t cur_ticks = SDL_GetTicks();
     double elapsed =  (cur_ticks -forward_start_ticks) / 1000.0;
@@ -381,17 +337,17 @@ struct Car {
       printf("front wall? %d\n",front_wall_detected);
       printf("right wall? %d\n",right_wall_detected);
 
-      // When backing up, keep backing up until we see a passage which
-      // is the opposite of our last turn.
+      // When backing up, we take rights if available, then lefts, or
+      // keep backing up if neither.
       if (in_reverse) {
 	if (!right_wall_detected) {
-	  printf("last turn was left - found right turn out\n");
+	  printf("mode to RIGHT TURN (from reverse)\n");
 	  mode = RIGHT_TURN;
 	  turning_start_ticks = SDL_GetTicks();
 	  in_reverse = false;
 	}
 	else if (!left_wall_detected) {
-	  printf("last turn was right - found left turn out\n");
+	  printf("mode to LEFT TURN (from reverse)\n");
 	  mode = LEFT_TURN;
 	  turning_start_ticks = SDL_GetTicks();
 	  in_reverse = false;
@@ -420,8 +376,9 @@ struct Car {
 	  printf("mode to CREEP TO WALL THEN RIGHT...\n");
 	  mode = CREEP_TO_WALL_THEN_RIGHT;
 	}
-	// L-left: look forward, creep to wall, turn left
-	else if (front_wall_detected && right_wall_detected && !left_wall_detected) {
+	// left turn with front wall for positioning
+	else if (front_wall_detected && !left_wall_detected) {
+	// else if (front_wall_detected && right_wall_detected && !left_wall_detected) {
 
 	  bool facing_front;
 	  do { facing_front = distsen.faceFront(); } while (!facing_front);
@@ -429,12 +386,13 @@ struct Car {
 	  printf("mode to CREEP TO WALL THEN LEFT...\n");
 	  mode = CREEP_TO_WALL_THEN_LEFT;
 	}
-	// L&F open: face left, creep back, then forward and left
+	// left turn without front wall for positioning
 	else if (!front_wall_detected && !left_wall_detected) {
 
 	  bool facing_left;
 	  do { facing_left = distsen.faceLeft(); } while (!facing_left);
-	
+
+	  printf("mode to CREEP BACK THEN LEFT...\n");
 	  mode = CREEP_BACK_THEN_LEFT;
 	}
 	// all closed: back up
@@ -454,10 +412,10 @@ struct Car {
       follow_line(maze);
       break;
     case LEFT_TURN:
-      turn_left(maze);
+      turn(maze, -1);
       break;
     case RIGHT_TURN:
-      turn_right(maze);
+      turn(maze, +1);
       break;
     case CREEP_TO_WALL_THEN_RIGHT:
       creep_forward_to_front_wall(maze, RIGHT_TURN);
@@ -609,50 +567,6 @@ struct Car {
       SDL_FreeSurface(surface);
       SDL_DestroyTexture(texture);
     }
-    {
-      std::string segText = "second pass: " +to_string(second_pass);
-      
-      SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
-      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-      
-      int textWidth, textHeight;
-      SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
-      
-      SDL_Rect dst = { 650 - textWidth / 2, 300 - textHeight / 2, textWidth, textHeight};
-      SDL_RenderCopy(renderer, texture, NULL, &dst);
-      SDL_FreeSurface(surface);
-      SDL_DestroyTexture(texture);
-    }
-    {
-      std::string segText = "left lockout: " +to_string(left_turn_lockout);
-      
-      SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
-      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-      
-      int textWidth, textHeight;
-      SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
-      
-      SDL_Rect dst = { 650 - textWidth / 2, 350 - textHeight / 2, textWidth, textHeight};
-      SDL_RenderCopy(renderer, texture, NULL, &dst);
-      SDL_FreeSurface(surface);
-      SDL_DestroyTexture(texture);
-    }
-    
-    {
-      std::string segText = "front sense lockout: " +to_string(front_lockout);
-      
-      SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
-      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-      
-      int textWidth, textHeight;
-      SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
-      
-      SDL_Rect dst = { 650 - textWidth / 2, 400 - textHeight / 2, textWidth, textHeight};
-      SDL_RenderCopy(renderer, texture, NULL, &dst);
-      SDL_FreeSurface(surface);
-      SDL_DestroyTexture(texture);
-    }
-    
   }
   
 
