@@ -3,6 +3,7 @@
 
 #include <string>
 #include <sstream>
+#include <map>
 using namespace std;
 
 #include "linesensor.hpp"
@@ -237,30 +238,12 @@ struct Car {
     
     readlinesensors(maze, lt, md, rt);
 
-    if (lt && md && !rt)  {
+    if (lt && !rt)  {
       theta -= steer_amount;
     }
-    if (lt && !md && !rt) {
-      theta -= steer_amount;
-    }
-    if (!lt && md && rt)  {
+    if (!lt && rt) {
       theta += steer_amount;
     }
-    if (!lt && !md && rt) {
-      theta += steer_amount;
-    }
-    // if (!lt && md && !rt) {
-    //   forward();
-    // }
-    // if (lt && !md && rt) {
-    //   forward();
-    // }
-    // if (lt && md && rt) {
-    //   forward();
-    // }
-    // if (!lt && !md && !rt) {
-    //   forward();
-    // }
     forward();
 
     uint32_t cur_ticks = SDL_GetTicks();
@@ -277,10 +260,11 @@ struct Car {
     // go front, left, right, then return to front
 
     // here you command FRONT and wait for the move
-    bool facing_front;
-    do {
-      facing_front = distsen.faceFront();
-    } while (!facing_front);
+    distsen.faceSensor(0);
+    // bool facing_front;
+    // do {
+    //   facing_front = distsen.faceFront();
+    // } while (!facing_front);
 
     double dist = readdistancesensor(maze);
     printf("front dist: %f\n",dist);
@@ -323,9 +307,24 @@ struct Car {
 
     }
 
-    facing_front = distsen.faceFront();
+    //facing_front = distsen.faceFront();
   }
 
+  void faceSensor(int dir)
+  {
+    bool facing; do { facing = distsen.faceSensor(dir); } while (!facing);
+  }
+
+  // void faceLeft()
+  // {
+  //   bool facing_left; do { facing_left = distsen.faceLeft(); } while (!facing_left);
+  // }
+
+  // void faceRight()
+  // {
+  //   bool facing_right; do { facing_right = distsen.faceRight(); } while (!facing_right);
+  // }
+  
   void look_and_react(Maze& maze) {
     printf("LOOK mode\n");
 
@@ -355,61 +354,102 @@ struct Car {
 	backup_start_ticks = SDL_GetTicks();
       }
     }
-    else {
+    else { // not in reverse
       
-      // front open but not left open - move forward
-      if (left_wall_detected && !front_wall_detected) {
-	printf("mode to FOLLOW_LINE\n");
-	mode = FOLLOW_LINE;
-	forward_start_ticks = SDL_GetTicks();      
-      }
-      // L-right: look forward, creep to wall, turn right
-      else if (left_wall_detected && front_wall_detected && !right_wall_detected) {
-	bool facing_front;
-	do { facing_front = distsen.faceFront(); } while (!facing_front);
-	
-	printf("mode to CREEP TO WALL THEN RIGHT...\n");
-	mode = CREEP_TO_WALL_THEN_RIGHT;
-      }
-      // left turn with front wall for positioning
-      else if (front_wall_detected && !left_wall_detected) {
-	bool facing_front;
-	do { facing_front = distsen.faceFront(); } while (!facing_front);
-	
-	printf("mode to CREEP TO WALL THEN LEFT...\n");
-	mode = CREEP_TO_WALL_THEN_LEFT;
-      }
-      // left turn without front wall for positioning
-      else if (!front_wall_detected && !left_wall_detected) {
-	
-	bool facing_left;
-	do { facing_left = distsen.faceLeft(); } while (!facing_left);
-	
-	printf("mode to CREEP BACK THEN LEFT...\n");
-	mode = CREEP_BACK_THEN_LEFT;
-      }
-      // all closed: back up
-      else if (front_wall_detected && right_wall_detected && left_wall_detected) {
-	printf("mode to CREEP_TO_WEALL_THEN_BACK...\n");
+      if (!left_wall_detected) {
+	if (front_wall_detected) {
 
-	bool facing_front;
-	do { facing_front = distsen.faceFront(); } while (!facing_front);
+	  printf("mode to CREEP TO WALL THEN LEFT...\n");
+	  distsen.faceFront();
+	  mode = CREEP_TO_WALL_THEN_LEFT;
+	  
+	} else {
+
+	  printf("mode to CREEP BACK THEN LEFT...\n");
+	  distsen.faceLeft();
+	  mode = CREEP_BACK_THEN_LEFT;
+	  
+	}
+      }
+      else { // left wall
+
+	if (!front_wall_detected) {
+	  printf("mode to FOLLOW_LINE\n");
+	  mode = FOLLOW_LINE;
+	  forward_start_ticks = SDL_GetTicks();      
+	}
+	else {
+
+	  if (!right_wall_detected) {
+	    bool facing_front; do { facing_front = distsen.faceFront(); } while (!facing_front);
+	    
+	    printf("mode to CREEP TO WALL THEN RIGHT...\n");
+	    mode = CREEP_TO_WALL_THEN_RIGHT;
+	  }
+	  else {
+
+	    bool facing_front; do { facing_front = distsen.faceFront(); } while (!facing_front);
+	    
+	    mode = CREEP_TO_WALL_THEN_BACK;
+	  }
+	  
+	}
+      }
+    }
+
+      // // front open but not left open - move forward
+      // if (left_wall_detected && !front_wall_detected) {
+      // 	printf("mode to FOLLOW_LINE\n");
+      // 	mode = FOLLOW_LINE;
+      // 	forward_start_ticks = SDL_GetTicks();      
+      // }
+      // // L-right: look forward, creep to wall, turn right
+      // else if (left_wall_detected && front_wall_detected && !right_wall_detected) {
+
+      // 	bool facing_front; do { facing_front = distsen.faceFront(); } while (!facing_front);
 	
-	mode = CREEP_TO_WALL_THEN_BACK;
-      }
-      else {
-	printf("UNHANDLED CASE\n");
-      }
+      // 	printf("mode to CREEP TO WALL THEN RIGHT...\n");
+      // 	mode = CREEP_TO_WALL_THEN_RIGHT;
+      // }
+      // // left turn with front wall for positioning
+      // else if (front_wall_detected && !left_wall_detected) {
+      // 	bool facing_front;
+      // 	do { facing_front = distsen.faceFront(); } while (!facing_front);
+	
+      // 	printf("mode to CREEP TO WALL THEN LEFT...\n");
+      // 	mode = CREEP_TO_WALL_THEN_LEFT;
+      // }
+      // // left turn without front wall for positioning
+      // else if (!front_wall_detected && !left_wall_detected) {
+	
+      // 	bool facing_left;
+      // 	do { facing_left = distsen.faceLeft(); } while (!facing_left);
+	
+      // 	printf("mode to CREEP BACK THEN LEFT...\n");
+      // 	mode = CREEP_BACK_THEN_LEFT;
+      // }
+      // // all closed: back up
+      // else if (front_wall_detected && right_wall_detected && left_wall_detected) {
+      // 	printf("mode to CREEP_TO_WEALL_THEN_BACK...\n");
+
+      // 	bool facing_front;
+      // 	do { facing_front = distsen.faceFront(); } while (!facing_front);
+	
+      // 	mode = CREEP_TO_WALL_THEN_BACK;
+      // }
+      // else {
+      // 	printf("UNHANDLED CASE\n");
+      // }
       
-    } // moving forward
   }
     
   void control(Maze& maze)
   {
+
     switch (mode) {
     case LOOK:
       look_and_react(maze);
-    break;
+      break;
     case FOLLOW_LINE:
       follow_line(maze);
       break;

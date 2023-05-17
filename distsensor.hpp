@@ -17,6 +17,13 @@ struct DistSensor {
 
   double getWorldTheta();
 
+  bool faceSensor(int dir) {
+    if (dir == -1) return faceLeft();
+    if (dir ==  0) return faceFront();
+    if (dir == +1) return faceRight();
+    return false;
+  }
+  
   bool faceLeft();
   bool faceRight();
   bool faceFront();
