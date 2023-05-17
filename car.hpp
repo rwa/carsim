@@ -9,6 +9,8 @@ using namespace std;
 #include "distsensor.hpp"
 #include "maze.hpp"
 
+#define DT 0.8
+
 // Drive modes
 #define FOLLOW_LINE 0
 #define LEFT_TURN 1
@@ -24,9 +26,9 @@ using namespace std;
 #define FRONT_STOP_DIST 20
 #define WALL_DIST 70
 
-#define FORWARD_TIME 3.0
-#define BACK_UP_TIME 3.0 // should match forward time most likely
-#define MOVE_UP_FOR_LEFT_TIME 3.5
+#define FORWARD_TIME 1.5
+#define BACK_UP_TIME 1.5 // should match forward time most likely
+#define MOVE_UP_FOR_LEFT_TIME 1.75
 #define TURN_TIME 0.7
 
 #define TURN_SPEED M_PI/100;
@@ -42,7 +44,7 @@ struct Car {
   Ray lastray;
 
   double w = 65;
-  double l = 70;
+  double l = 80;
 
   double x,y;
 
@@ -114,19 +116,17 @@ struct Car {
   void backward()
   {
     double u = -1.0;
-    double dt = 0.4;
     
-    x += u*sin(theta)*dt;
-    y -= u*cos(theta)*dt;
+    x += u*sin(theta)*DT;
+    y -= u*cos(theta)*DT;
   }
 
   void forward()
   {
     double u = 1.0;
-    double dt = 0.4;
     
-    x += u*sin(theta)*dt;
-    y -= u*cos(theta)*dt;
+    x += u*sin(theta)*DT;
+    y -= u*cos(theta)*DT;
   }
 
   void readlinesensors(Maze& maze, bool& l, bool& m, bool& r)
@@ -160,7 +160,7 @@ struct Car {
   {
     forward();
     double dist = readdistancesensor(maze);
-
+    
     if (dist < FRONT_STOP_DIST) {
       printf("mode to TURN %d\n",turn_mode);
       mode = turn_mode;
@@ -182,7 +182,7 @@ struct Car {
     
   }
 
-  void move_up_for_left(Maze& maze)
+  void move_up_for_left()
   {
     forward();
     
@@ -196,7 +196,7 @@ struct Car {
     }
   }
   
-  void turn(Maze& maze, int dir)
+  void turn(int dir)
   {
     theta += dir*TURN_SPEED;
     
@@ -211,7 +211,7 @@ struct Car {
     }
   }
 
-  void back_up(Maze& maze)
+  void back_up()
   {
     backward();
 
@@ -260,6 +260,7 @@ struct Car {
     double elapsed =  (cur_ticks -forward_start_ticks) / 1000.0;
     if (elapsed > FORWARD_TIME) {
       printf("END following line\n");
+      // stop motors
       mode = LOOK;
     }
   }
@@ -386,7 +387,7 @@ struct Car {
     } // moving forward
   }
     
-  void control(Maze& maze, double elapsed_time)
+  void control(Maze& maze)
   {
     switch (mode) {
     case LOOK:
@@ -396,10 +397,10 @@ struct Car {
       follow_line(maze);
       break;
     case LEFT_TURN:
-      turn(maze, -1);
+      turn(-1);
       break;
     case RIGHT_TURN:
-      turn(maze, +1);
+      turn(+1);
       break;
     case CREEP_TO_WALL_THEN_RIGHT:
       creep_forward_to_front_wall(maze, RIGHT_TURN);
@@ -411,10 +412,10 @@ struct Car {
       creep_back_to_left_wall(maze);
       break;
     case MOVE_UP_FOR_LEFT:
-      move_up_for_left(maze);
+      move_up_for_left();
       break;
     case BACK_UP:
-      back_up(maze);
+      back_up();
       break;
     }
   }

@@ -170,7 +170,7 @@ int main()
     elapsed_time = (currTime - startTime) / 1000.0; // Convert to seconds.
     
     // Control the car
-    car.control(maze, elapsed_time);
+    car.control(maze);
 
     frameTime = SDL_GetTicks() - frameStart;
 
