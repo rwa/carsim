@@ -1,6 +1,7 @@
 
 #include <SDL.h>
 
+#include <algorithm>
 #include <string>
 #include <sstream>
 #include <map>
@@ -187,14 +188,20 @@ struct Car {
     
   }
 
+  bool timed_out(uint32_t base, double duration) {
+
+    uint32_t cur_ticks = SDL_GetTicks();
+    double elapsed =  (cur_ticks -base) / 1000.0;
+
+    if (elapsed > duration) return true;
+    return false;
+  }
+  
   void move_up_for_left()
   {
     forward();
-    
-    uint32_t cur_ticks = SDL_GetTicks();
-    double elapsed_turning =  (cur_ticks -move_up_start_ticks) / 1000.0;
-    
-    if (elapsed_turning > MOVE_UP_FOR_LEFT_TIME) {
+
+    if ( timed_out(move_up_start_ticks, MOVE_UP_FOR_LEFT_TIME) ) {
       printf("mode to LEFT TURN\n");
       mode = LEFT_TURN;
       turning_start_ticks = SDL_GetTicks();      
@@ -204,11 +211,8 @@ struct Car {
   void turn(int dir)
   {
     theta += dir*TURN_SPEED;
-    
-    uint32_t cur_ticks = SDL_GetTicks();
-    double elapsed_turning =  (cur_ticks -turning_start_ticks) / 1000.0;
-    
-    if (elapsed_turning > TURN_TIME) {
+
+    if ( timed_out(turning_start_ticks, TURN_TIME) ) {
       printf("mode to FOLLOW_LINE\n");
       mode = FOLLOW_LINE;
       forward_start_ticks = SDL_GetTicks();      
@@ -220,10 +224,7 @@ struct Car {
   {
     backward();
 
-    uint32_t cur_ticks = SDL_GetTicks();
-    double elapsed_turning =  (cur_ticks -backup_start_ticks) / 1000.0;
-    
-    if (elapsed_turning > BACK_UP_TIME) {
+    if ( timed_out(backup_start_ticks, BACK_UP_TIME) ) {
       in_reverse = true;
       mode = LOOK;
     }
@@ -246,9 +247,7 @@ struct Car {
     }
     forward();
 
-    uint32_t cur_ticks = SDL_GetTicks();
-    double elapsed =  (cur_ticks -forward_start_ticks) / 1000.0;
-    if (elapsed > FORWARD_TIME) {
+    if ( timed_out(forward_start_ticks, FORWARD_TIME) ) {
       printf("END following line\n");
       // stop motors
       mode = LOOK;
@@ -288,7 +287,7 @@ struct Car {
       left_wall_detected = true;
     }
 
-    // If left wall is detected, test right
+    // If there isn't a left wall, no need to test right
     if (left_wall_detected || in_reverse) {
 
       // here you command RIGHT and wait for the move
@@ -315,16 +314,6 @@ struct Car {
     bool facing; do { facing = distsen.faceSensor(dir); } while (!facing);
   }
 
-  // void faceLeft()
-  // {
-  //   bool facing_left; do { facing_left = distsen.faceLeft(); } while (!facing_left);
-  // }
-
-  // void faceRight()
-  // {
-  //   bool facing_right; do { facing_right = distsen.faceRight(); } while (!facing_right);
-  // }
-  
   void look_and_react(Maze& maze) {
     printf("LOOK mode\n");
 
@@ -336,35 +325,37 @@ struct Car {
     // When backing up, we take rights if available, then lefts, or
     // keep backing up if neither.
     if (in_reverse) {
+
       if (!right_wall_detected) {
-	printf("mode to RIGHT TURN (from reverse)\n");
-	mode = RIGHT_TURN;
-	turning_start_ticks = SDL_GetTicks();
-	in_reverse = false;
+      	printf("mode to RIGHT TURN (from reverse)\n");
+      	mode = RIGHT_TURN;
+      	turning_start_ticks = SDL_GetTicks();
+      	in_reverse = false;
       }
       else if (!left_wall_detected) {
-	printf("mode to LEFT TURN (from reverse)\n");
-	mode = LEFT_TURN;
-	turning_start_ticks = SDL_GetTicks();
-	in_reverse = false;
+      	printf("mode to LEFT TURN (from reverse)\n");
+      	mode = LEFT_TURN;
+      	turning_start_ticks = SDL_GetTicks();
+      	in_reverse = false;
       }
       else {
-	printf("mode to BACK_UP...\n");
-	mode = BACK_UP;
-	backup_start_ticks = SDL_GetTicks();
+      	printf("mode to BACK_UP...\n");
+      	mode = BACK_UP;
+      	backup_start_ticks = SDL_GetTicks();
       }
     }
+
     else { // not in reverse
       
       if (!left_wall_detected) {
 	if (front_wall_detected) {
-
+	  
 	  printf("mode to CREEP TO WALL THEN LEFT...\n");
 	  distsen.faceFront();
 	  mode = CREEP_TO_WALL_THEN_LEFT;
 	  
 	} else {
-
+	  
 	  printf("mode to CREEP BACK THEN LEFT...\n");
 	  distsen.faceLeft();
 	  mode = CREEP_BACK_THEN_LEFT;
@@ -372,14 +363,14 @@ struct Car {
 	}
       }
       else { // left wall
-
+	
 	if (!front_wall_detected) {
 	  printf("mode to FOLLOW_LINE\n");
 	  mode = FOLLOW_LINE;
 	  forward_start_ticks = SDL_GetTicks();      
 	}
 	else {
-
+	  
 	  if (!right_wall_detected) {
 	    bool facing_front; do { facing_front = distsen.faceFront(); } while (!facing_front);
 	    
@@ -387,60 +378,16 @@ struct Car {
 	    mode = CREEP_TO_WALL_THEN_RIGHT;
 	  }
 	  else {
-
+	    
 	    bool facing_front; do { facing_front = distsen.faceFront(); } while (!facing_front);
 	    
 	    mode = CREEP_TO_WALL_THEN_BACK;
 	  }
 	  
 	}
+	
       }
     }
-
-      // // front open but not left open - move forward
-      // if (left_wall_detected && !front_wall_detected) {
-      // 	printf("mode to FOLLOW_LINE\n");
-      // 	mode = FOLLOW_LINE;
-      // 	forward_start_ticks = SDL_GetTicks();      
-      // }
-      // // L-right: look forward, creep to wall, turn right
-      // else if (left_wall_detected && front_wall_detected && !right_wall_detected) {
-
-      // 	bool facing_front; do { facing_front = distsen.faceFront(); } while (!facing_front);
-	
-      // 	printf("mode to CREEP TO WALL THEN RIGHT...\n");
-      // 	mode = CREEP_TO_WALL_THEN_RIGHT;
-      // }
-      // // left turn with front wall for positioning
-      // else if (front_wall_detected && !left_wall_detected) {
-      // 	bool facing_front;
-      // 	do { facing_front = distsen.faceFront(); } while (!facing_front);
-	
-      // 	printf("mode to CREEP TO WALL THEN LEFT...\n");
-      // 	mode = CREEP_TO_WALL_THEN_LEFT;
-      // }
-      // // left turn without front wall for positioning
-      // else if (!front_wall_detected && !left_wall_detected) {
-	
-      // 	bool facing_left;
-      // 	do { facing_left = distsen.faceLeft(); } while (!facing_left);
-	
-      // 	printf("mode to CREEP BACK THEN LEFT...\n");
-      // 	mode = CREEP_BACK_THEN_LEFT;
-      // }
-      // // all closed: back up
-      // else if (front_wall_detected && right_wall_detected && left_wall_detected) {
-      // 	printf("mode to CREEP_TO_WEALL_THEN_BACK...\n");
-
-      // 	bool facing_front;
-      // 	do { facing_front = distsen.faceFront(); } while (!facing_front);
-	
-      // 	mode = CREEP_TO_WALL_THEN_BACK;
-      // }
-      // else {
-      // 	printf("UNHANDLED CASE\n");
-      // }
-      
   }
     
   void control(Maze& maze)
