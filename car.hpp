@@ -304,21 +304,26 @@ struct Car {
       left_wall_detected = true;
     }
 
-    // here you command RIGHT and wait for the move
-    bool facing_right;
-    do {
-      facing_right = distsen.faceRight();
-    } while (!facing_right);
+    // If left wall is detected, test right
+    if (left_wall_detected || in_reverse) {
 
-    dist = readdistancesensor(maze);
-    printf("right dist: %f\n",dist);
+      // here you command RIGHT and wait for the move
+      bool facing_right;
+      do {
+	facing_right = distsen.faceRight();
+      } while (!facing_right);
 
-    right_wall_detected = false;
-    if (dist < WALL_DIST) {
-      right_wall_detected = true;
+      dist = readdistancesensor(maze);
+      printf("right dist: %f\n",dist);
+
+      right_wall_detected = false;
+      if (dist < WALL_DIST) {
+	right_wall_detected = true;
+      }
+
     }
 
-      facing_front = distsen.faceFront();
+    facing_front = distsen.faceFront();
   }
 
   void look_and_react(Maze& maze) {
