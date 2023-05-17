@@ -9,7 +9,7 @@ using namespace std;
 #include "distsensor.hpp"
 #include "maze.hpp"
 
-#define DT 0.8
+#define DT 1.6
 
 // Drive modes
 #define FOLLOW_LINE 0
@@ -19,16 +19,17 @@ using namespace std;
 #define LOOK 4
 #define CREEP_TO_WALL_THEN_RIGHT 5
 #define CREEP_TO_WALL_THEN_LEFT 6
-#define CREEP_BACK_THEN_LEFT 7
-#define BACK_UP 8
+#define CREEP_TO_WALL_THEN_BACK 7
+#define CREEP_BACK_THEN_LEFT 8
+#define BACK_UP 9
 
 // Adjustable parameters
 #define FRONT_STOP_DIST 20
-#define WALL_DIST 70
+#define WALL_DIST 75
 
-#define FORWARD_TIME 1.5
-#define BACK_UP_TIME 1.5 // should match forward time most likely
-#define MOVE_UP_FOR_LEFT_TIME 1.75
+#define FORWARD_TIME 1.5/2
+#define BACK_UP_TIME 1.85/2
+#define MOVE_UP_FOR_LEFT_TIME 1.75/2
 #define TURN_TIME 0.7
 
 #define TURN_SPEED M_PI/100;
@@ -43,9 +44,6 @@ struct Car {
 
   Ray lastray;
 
-  double w = 65;
-  double l = 80;
-
   double x,y;
 
   double r = static_cast<double>(rand()) / static_cast<double>(RAND_MAX);
@@ -57,7 +55,8 @@ struct Car {
   SDL_Texture* texture;
 
   int mode;
-
+  bool lt,md,rt;
+  
   bool in_reverse = false;
 
   bool front_wall_detected = false;
@@ -85,7 +84,10 @@ struct Car {
 
   vector<Point> left_wall_backup_start;
   vector<Point> left_wall_backup_end;
-  
+
+  double w = 65;
+  double l = 80;
+
   Car(SDL_Renderer* renderer) {
 
     // x = 4.5*CELL_SIZE;
@@ -162,9 +164,11 @@ struct Car {
     double dist = readdistancesensor(maze);
     
     if (dist < FRONT_STOP_DIST) {
-      printf("mode to TURN %d\n",turn_mode);
+      printf("done creep, mode to %d\n",turn_mode);
       mode = turn_mode;
       turning_start_ticks = SDL_GetTicks();
+      if (turn_mode == BACK_UP) backup_start_ticks = SDL_GetTicks();  
+      
     }
     
   }
@@ -231,30 +235,33 @@ struct Car {
     
     double steer_amount = 0.005*M_PI;
     
-    bool l,m,r;
-    readlinesensors(maze, l, m, r);
+    readlinesensors(maze, lt, md, rt);
 
-    if (l && m && !r)  {
+    if (lt && md && !rt)  {
       theta -= steer_amount;
     }
-    if (l && !m && !r) {
+    if (lt && !md && !rt) {
       theta -= steer_amount;
     }
-    if (!l && m && r)  {
+    if (!lt && md && rt)  {
       theta += steer_amount;
     }
-    if (!l && !m && r) {
+    if (!lt && !md && rt) {
       theta += steer_amount;
     }
-    if (!l && m && !r) {
-      forward();
-    }
-    if (l && m && r) {
-      forward();
-    }
-    if (!l && !m && !r) {
-      forward();
-    }
+    // if (!lt && md && !rt) {
+    //   forward();
+    // }
+    // if (lt && !md && rt) {
+    //   forward();
+    // }
+    // if (lt && md && rt) {
+    //   forward();
+    // }
+    // if (!lt && !md && !rt) {
+    //   forward();
+    // }
+    forward();
 
     uint32_t cur_ticks = SDL_GetTicks();
     double elapsed =  (cur_ticks -forward_start_ticks) / 1000.0;
@@ -267,20 +274,7 @@ struct Car {
 
   void sense_walls(Maze& maze)
   {
-
-    // here you command LEFT and wait for the move
-    bool facing_left;
-    do {
-      facing_left = distsen.faceLeft();
-    } while (!facing_left);
-
-    double dist = readdistancesensor(maze);
-    printf("left dist: %f\n",dist);
-	
-    left_wall_detected = false;
-    if (dist < WALL_DIST) {
-      left_wall_detected = true;
-    }
+    // go front, left, right, then return to front
 
     // here you command FRONT and wait for the move
     bool facing_front;
@@ -288,12 +282,26 @@ struct Car {
       facing_front = distsen.faceFront();
     } while (!facing_front);
 
-    dist = readdistancesensor(maze);
+    double dist = readdistancesensor(maze);
     printf("front dist: %f\n",dist);
 
     front_wall_detected = false;
     if (dist < WALL_DIST) {
       front_wall_detected = true;
+    }
+    
+    // here you command LEFT and wait for the move
+    bool facing_left;
+    do {
+      facing_left = distsen.faceLeft();
+    } while (!facing_left);
+
+    dist = readdistancesensor(maze);
+    printf("left dist: %f\n",dist);
+	
+    left_wall_detected = false;
+    if (dist < WALL_DIST) {
+      left_wall_detected = true;
     }
 
     // here you command RIGHT and wait for the move
@@ -309,7 +317,8 @@ struct Car {
     if (dist < WALL_DIST) {
       right_wall_detected = true;
     }
-    
+
+      facing_front = distsen.faceFront();
   }
 
   void look_and_react(Maze& maze) {
@@ -376,9 +385,12 @@ struct Car {
       }
       // all closed: back up
       else if (front_wall_detected && right_wall_detected && left_wall_detected) {
-	printf("mode to BACK_UP...\n");
-	mode = BACK_UP;
-	backup_start_ticks = SDL_GetTicks();      
+	printf("mode to CREEP_TO_WEALL_THEN_BACK...\n");
+
+	bool facing_front;
+	do { facing_front = distsen.faceFront(); } while (!facing_front);
+	
+	mode = CREEP_TO_WALL_THEN_BACK;
       }
       else {
 	printf("UNHANDLED CASE\n");
@@ -407,6 +419,9 @@ struct Car {
       break;
     case CREEP_TO_WALL_THEN_LEFT:
       creep_forward_to_front_wall(maze, LEFT_TURN);
+      break;
+    case CREEP_TO_WALL_THEN_BACK:
+      creep_forward_to_front_wall(maze, BACK_UP);
       break;
     case CREEP_BACK_THEN_LEFT:
       creep_back_to_left_wall(maze);
@@ -548,6 +563,25 @@ struct Car {
       SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
       
       SDL_Rect dst = { 650 - textWidth / 2, 250 - textHeight / 2, textWidth, textHeight};
+      SDL_RenderCopy(renderer, texture, NULL, &dst);
+      SDL_FreeSurface(surface);
+      SDL_DestroyTexture(texture);
+    }
+
+    {
+      string dir(to_string(lt) + to_string(md) + to_string(rt));
+      
+      // if (distsen.last_rot == -1) dir = "left";
+      // if (distsen.last_rot == 0) dir = "front";
+      std::string segText = "lmr: " +dir;
+      
+      SDL_Surface* surface = TTF_RenderText_Solid(font, segText.c_str(), textColor);
+      SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+      
+      int textWidth, textHeight;
+      SDL_QueryTexture(texture, NULL, NULL, &textWidth, &textHeight);
+      
+      SDL_Rect dst = { 650 - textWidth / 2, 300 - textHeight / 2, textWidth, textHeight};
       SDL_RenderCopy(renderer, texture, NULL, &dst);
       SDL_FreeSurface(surface);
       SDL_DestroyTexture(texture);
